@@ -44,13 +44,15 @@ cd proyecto-consumo-materiales**
 ✅ Cada integrante trabaja solo en su rama
 
 🔹 Ramas del proyecto
-|Rama	| Rol|
--------------------------------
-|frontend |	HTML / CSS |
-|javascript |	JS e integración|
-|backend	| Flask + ED|
-|database |	SQLite|
-|machine_learning	| Datos y ML|
+
+|Rama	            | Rol             |
+|-----------------|-----------------|
+|frontend         | HTML / CSS      |
+|javascript       | JS e integración|
+|backend	        | Flask + ED      |
+|database         |	SQLite          |
+|machine_learning	| Datos y ML      |
+
 🔹 Cambiar a tu rama
 Desde terminal:
 git switch nombre_de_tu_rama
