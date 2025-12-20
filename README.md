@@ -13,7 +13,7 @@ Antes de empezar, cada integrante debe tener instalado:
 Windows / Mac / Linux
 
 Descargar desde:
-👉 https://git-scm.com/
+👉 [https://git-scm.com/](https://git-scm.com/)
 
 Verificar instalación:
 
@@ -31,7 +31,7 @@ Verificar:
 
 Cada integrante debe clonar el proyecto una sola vez:
 
-**git clone https://github.com/USUARIO/proyecto-consumo-materiales.git
+**git clone [https://github.com/AndyNeva/proyecto-consumo-materiales.git](https://github.com/AndyNeva/proyecto-consumo-materiales.git)
 cd proyecto-consumo-materiales**
 
 
@@ -203,3 +203,6 @@ no perder trabajo
 avanzar rápido y ordenado
 
 Si tienes dudas, pregunta antes de hacer merge.
+
+## NOTA
+**Leer la información respectiva de su rol en docs/ROLES.md**
