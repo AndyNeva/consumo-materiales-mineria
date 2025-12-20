@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Entornos virtuales
+venv/
+.env/
+
+# Base de datos
+*.db
+
+# Modelos entrenados
+*.pkl
+
+# VS Code
+.vscode/
+
+# Archivos temporales
+*.log
