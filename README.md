@@ -55,9 +55,10 @@ cd proyecto-consumo-materiales**
 
 🔹 Cambiar a tu rama
 Desde terminal:
+
 git switch nombre_de_tu_rama
 
-Desde VS Code:
+🔹 Desde VS Code:
 
 esquina inferior izquierda
 
@@ -65,19 +66,19 @@ clic en el nombre de la rama
 
 seleccionar tu rama
 
-✍️ Flujo correcto de trabajo
-1️⃣ Trabaja solo en tus carpetas asignadas
+## ✍️ Flujo correcto de trabajo
+### 1️⃣ Trabaja solo en tus carpetas asignadas
 
 (No tocar archivos de otros roles)
 
-2️⃣ Guarda cambios y haz commit
-Desde terminal:
+### 2️⃣ Guarda cambios y haz commit
+🔹Desde terminal:
 git status
 git add .
 git commit -m "Mensaje claro del cambio"
 
 
-Ejemplos de buenos commits:
+**Ejemplos de buenos commits:**
 
 Diseño inicial del dashboard
 
@@ -85,7 +86,7 @@ Agrega búsqueda con árbol BST
 
 Entrena modelo de predicción
 
-Desde VS Code (UI):
+🔹Desde VS Code (UI):
 
 Ir a Source Control
 
@@ -95,17 +96,17 @@ Escribir mensaje de commit
 
 Clic en Commit
 
-3️⃣ Subir cambios (push)
-Terminal:
+### 3️⃣ Subir cambios (push)
+🔹Terminal:
 git push origin nombre_de_tu_rama
 
-VS Code:
+🔹VS Code:
 
 botón Sync / Push 🔄
 
-🔄 Sincronizar tu rama con main (MUY IMPORTANTE)
+### 🔄 Sincronizar tu rama con main (MUY IMPORTANTE)
 
-Esto se hace SIEMPRE:
+**Esto se hace SIEMPRE:**
 
 antes de avisar para merge
 
@@ -118,7 +119,7 @@ git switch nombre_de_tu_rama
 git merge main
 
 
-Si hay conflictos:
+**Si hay conflictos:**
 
 se resuelven
 
@@ -142,7 +143,7 @@ Resolver conflictos si aparecen
 
 Commit del merge
 
-📣 Aviso para integración (Pull Request)
+## 📣 Aviso para integración (Pull Request)
 
 👉 Los integrantes NO hacen Pull Request
 
@@ -152,11 +153,11 @@ Asegúrate de que tu rama esté sincronizada con main
 
 Haz push
 
-Avísame por el canal del equipo
+**Avísame por el canal del equipo**
 
-qué hiciste
+- qué hiciste
 
-qué archivos tocaste
+- qué archivos tocaste
 
 Yo me encargo de:
 
@@ -166,7 +167,7 @@ hacer el PR
 
 hacer el merge a main
 
-🕘🕓 Horario de integración (merge)
+## 🕘🕓 Horario de integración (merge)
 
 Los merges se hacen solo en estos horarios:
 
@@ -177,7 +178,7 @@ Los merges se hacen solo en estos horarios:
 📌 Máximo un merge por ventana
 📌 Fuera de ese horario no se integra a main
 
-🛑 Reglas de oro (léelas dos veces)
+## 🛑 Reglas de oro (léelas dos veces)
 
 ❌ No trabajar en main
 
@@ -191,7 +192,7 @@ Los merges se hacen solo en estos horarios:
 
 ✅ Avisar antes de integrar
 
-🧠 Nota final
+## 🧠 Nota final
 
 Estas reglas existen para:
 
