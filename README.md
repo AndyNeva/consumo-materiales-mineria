@@ -1,10 +1,10 @@
-## 📦 Proyecto Consumo de Materiales
+# 📦 Proyecto Consumo de Materiales
 
 Sistema web desarrollado con Flask, SQLite, Estructuras de Datos y Machine Learning para el análisis y proyección del consumo de materiales.
 
 Este repositorio se trabaja estrictamente con ramas, siguiendo reglas claras para evitar conflictos de merge.
 
-🧰 Requisitos previos
+## 🧰 Requisitos previos
 
 Antes de empezar, cada integrante debe tener instalado:
 
@@ -17,7 +17,7 @@ Descargar desde:
 
 Verificar instalación:
 
-git --version
+**git --version**
 
 🔹 Python (si aplica a tu rol)
 
@@ -25,31 +25,32 @@ Versión recomendada: Python 3.10+
 
 Verificar:
 
-python --version
+**python --version**
 
-📥 Clonar el repositorio
+## 📥 Clonar el repositorio
 
 Cada integrante debe clonar el proyecto una sola vez:
 
-git clone https://github.com/USUARIO/proyecto-consumo-materiales.git
-cd proyecto-consumo-materiales
+**git clone https://github.com/USUARIO/proyecto-consumo-materiales.git
+cd proyecto-consumo-materiales**
 
 
 ⚠️ Nunca descargar el proyecto como ZIP.
 
-🌿 Trabajo con ramas (OBLIGATORIO)
+## 🌿 Trabajo con ramas (OBLIGATORIO)
 🔹 Regla principal
 
 ❌ Nadie trabaja en main
 ✅ Cada integrante trabaja solo en su rama
 
 🔹 Ramas del proyecto
-Rama	Rol
-frontend	HTML / CSS
-javascript	JS e integración
-backend	Flask + ED
-database	SQLite
-machine_learning	Datos y ML
+|Rama	| Rol|
+-------------------------------
+|frontend |	HTML / CSS |
+|javascript |	JS e integración|
+|backend	| Flask + ED|
+|database |	SQLite|
+|machine_learning	| Datos y ML|
 🔹 Cambiar a tu rama
 Desde terminal:
 git switch nombre_de_tu_rama
