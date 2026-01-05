@@ -49,4 +49,4 @@ def buscar_por_rango(fecha_inicio: str, fecha_fin: str):
     # Retorna registros entre fecha_inicio y fecha_fin (inclusivo)
     return avl.buscar_rango(fecha_inicio, fecha_fin)
 
-
+comparar_tiempos_busqueda('2023-04-25')
