@@ -41,6 +41,14 @@ class ArbolBinario(ABC):
         if resultado is None:
             raise ValueError("El árbol está vacío")
         return resultado
+    
+    # Método público para buscar entradas por rango de fecha
+    def buscar_rango(self, fecha_inicio: str, fecha_fin: str):
+        if not isinstance(fecha_inicio, str) and not isinstance(fecha_fin, str):
+            raise TypeError("La fecha debe ser una cadena (YYYY-MM-DD)")
+        resultado = []
+        self._buscar_rango_recursivo(self._raiz, fecha_inicio, fecha_fin, resultado)
+        return resultado
 
     # Método público para recorrer el árbol
     def inorden(self):
@@ -66,6 +74,22 @@ class ArbolBinario(ABC):
             self._buscar_recursivo(nodo._izq, fecha, resultado)  # Buscar en subárbol izquierdo
         else:
             self._buscar_recursivo(nodo._der, fecha, resultado)  # Buscar en subárbol derecho
+
+    # Método recursivo privado para buscar entradas por rango fecha
+    def _buscar_rango_recursivo(self, nodo, inicio, fin, resultado):
+        if nodo is None:
+            return
+        # Si la fecha del nodo está dentro del rango
+        if inicio <= nodo.fecha <= fin:
+            resultado.extend(nodo.registros)
+            self._buscar_rango_recursivo(nodo._izq, inicio, fin, resultado)
+            self._buscar_rango_recursivo(nodo._der, inicio, fin, resultado)
+        # Si la fecha es menor que el inicio, ir a la derecha
+        elif nodo.fecha < inicio:
+            self._buscar_rango_rec(nodo._der, inicio, fin, resultado)
+        # Si la fecha es mayor que el fin, ir a la izquierda
+        else:
+            self._buscar_rango_rec(nodo._izq, inicio, fin, resultado)
 
     # Método recursivo privado para recorrer el árbol
     def _inorden_recursivo(self, nodo, resultado):
