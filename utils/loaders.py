@@ -8,6 +8,6 @@ def get_db_connection_flask():
     conn.row_factory = sqlite3.Row  # permite dict(row)
     return conn
 def get_db_connection_standalone():
-    db_path = Path(__file__).parent.parent / "db" / "inventario.db"
+    db_path = Path(__file__).parent.parent / "db" / "gestion_materiales.db"
     conn = sqlite3.connect(db_path)
     return conn
