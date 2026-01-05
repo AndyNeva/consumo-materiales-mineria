@@ -55,6 +55,9 @@ def api_datos():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# GET  /api/buscar      -> recibe ?texto=
+# POST /api/agregar     -> recibe JSON (fecha, material, cantidad)
+# GET  /api/proyeccion  -> devuelve predicción
 
 
 
