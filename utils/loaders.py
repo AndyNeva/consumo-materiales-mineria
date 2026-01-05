@@ -31,6 +31,7 @@ def cargar_datos_tabla(tabla: str):
     """
 
     tablas_permitidas = {'despachos', 'movimientos', 'recetas'}
+    # Valida que la tabla solicitada esté en la lista permitida
     if tabla not in tablas_permitidas:
         raise ValueError(f"Tabla '{tabla}' no permitida. Use: {tablas_permitidas}")
 
@@ -42,10 +43,8 @@ def cargar_datos_tabla(tabla: str):
         conn = obtener_conexion_autonoma()
 
     cursor = conn.cursor()
-    cursor.execute(f"""
-                SELECT *
-                FROM {tabla}
-                   """)
+    # Ejecuta la consulta SQL para obtener TODOS los registros de la tabla
+    cursor.execute(f"SELECT * FROM {tabla}")
     datos = cursor.fetchall()
     conn.close()
 
