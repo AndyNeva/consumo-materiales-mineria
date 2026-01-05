@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from utils.loaders import get_db_connection_standalone
 
 class Nodo(ABC):
     """
@@ -86,10 +85,10 @@ class ArbolBinario(ABC):
             self._buscar_rango_recursivo(nodo._der, inicio, fin, resultado)
         # Si la fecha es menor que el inicio, ir a la derecha
         elif nodo.fecha < inicio:
-            self._buscar_rango_rec(nodo._der, inicio, fin, resultado)
+            self._buscar_rango_recursivo(nodo._der, inicio, fin, resultado)
         # Si la fecha es mayor que el fin, ir a la izquierda
         else:
-            self._buscar_rango_rec(nodo._izq, inicio, fin, resultado)
+            self._buscar_rango_recursivo(nodo._izq, inicio, fin, resultado)
 
     # Método recursivo privado para recorrer el árbol
     def _inorden_recursivo(self, nodo, resultado):
@@ -113,7 +112,7 @@ class ArbolBinarioBusqueda(ArbolBinario):
     - Peor caso (degenerado): O(n)
     """
     def __init__(self):
-        self._raiz = None
+        super().__init__()
 
     # Implementación concreta del método abstracto
     def _insertar_recursivo(self, nodo, fecha, dato):
@@ -145,7 +144,7 @@ class ArbolAVL(ArbolBinario):
     O(log n) para inserción, búsqueda y eliminación
     """
     def __init__(self):
-        self._raiz = None
+        super().__init__()
 
     def _altura(self, nodo):
         """Altura del nodo: distancia máxima hasta una hoja."""
