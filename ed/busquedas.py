@@ -1,6 +1,10 @@
 from ed.estructuras import ArbolAVL, ArbolBinarioBusqueda
 from utils.loaders import cargar_datos_tabla
 import time
+import sys
+
+# Aumentar límite de recursión para BST degenerado
+sys.setrecursionlimit(10000)
 
 def comparar_tiempos_busqueda(fecha_objetivo: str):
     """
@@ -49,4 +53,4 @@ def buscar_por_rango(fecha_inicio: str, fecha_fin: str):
     # Retorna registros entre fecha_inicio y fecha_fin (inclusivo)
     return avl.buscar_rango(fecha_inicio, fecha_fin)
 
-comparar_tiempos_busqueda('2023-04-25')
+comparar_tiempos_busqueda('2025-11-15')
