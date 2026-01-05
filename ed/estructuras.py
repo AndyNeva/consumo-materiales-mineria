@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from utils.loaders import get_db_connection_standalone
 
 class Nodo(ABC):
     """
