@@ -53,4 +53,20 @@ def buscar_por_rango(fecha_inicio: str, fecha_fin: str):
     # Retorna registros entre fecha_inicio y fecha_fin (inclusivo)
     return avl.buscar_rango(fecha_inicio, fecha_fin)
 
+def busqueda_por_diseno(datos:list[dict], diseno:str):
+    resultados = []
+    for entrada in datos:
+        if entrada['diseno_mezcla'] ==diseno:
+            resultados.append(entrada)
+    
+    return resultados
+
+def busqueda_por_destino(datos:list[dict], destino:str):
+    resultados = []
+    for entrada in datos:
+        if entrada['zona'] ==destino:
+            resultados.append(entrada)
+    
+    return resultados
+
 comparar_tiempos_busqueda('2025-11-15')
