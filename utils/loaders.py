@@ -1,6 +1,14 @@
 from flask import current_app
 import sqlite3
 from pathlib import Path
+import os
+
+# Ruta base del proyecto (carpeta proyecto-consumo-materiales)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Ruta absoluta a la base de datos
+DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
+
 
 def obtener_conexion_flask():
     """
