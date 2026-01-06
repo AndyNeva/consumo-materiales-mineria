@@ -60,7 +60,7 @@ cursor = conn.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, rol TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS materiales (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT UNIQUE, unidad TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS movimientos (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER, material_id INTEGER, cantidad REAL, fecha TEXT, tipo TEXT, proveedor TEXT, detalle TEXT)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS despachos (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, fuente_cemento TEXT, diseno_mezcla TEXT, lote TEXT, zona TEXT, wbs TEXT, volumen_m3 REAL, turno TEXT, arena_humedad_pct REAL, asentamiento_final_cm REAL, temperatura_c REAL)''')
+cursor.execute('''CREATE TABLE IF NOT EXISTS despachos (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, fuente_cemento TEXT, diseno_mezcla TEXT, lote TEXT, zona TEXT, wbs TEXT, volumen_m3 REAL, turno TEXT, arena_humedad_pct REAL, asentamiento_final_cm REAL, temperatura_c REAL, arena_kg REAL, grava_kg REAL, cemento_he_kg REAL, cemento_ip_kg REAL, agua_kg REAL, aditivo_rheo_sika115 REAL, aditivo_basf_sika200 REAL, aditivo_delvo REAL, aditivo_glenium_7950 REAL, aditivo_glenium_7970 REAL, aditivo_fibras REAL)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS centros_costos (id INTEGER PRIMARY KEY AUTOINCREMENT, codigo TEXT UNIQUE)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS zonas (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT UNIQUE)''')
 
@@ -93,11 +93,38 @@ try:
         fecha = str(row.get('FECHA')).split(' ')[0]
         if pd.isna(row.get('FECHA')) or fecha in ['NaT', 'nan', '', '-']: continue
         
-        vals = (fecha, str(row.get('Fuente de cemento','')), str(row.get('Diseño de la Mezcla','')), str(row.get('Lote #','')), 
-                str(row.get('Zona','')), str(row.get('WBS','')), limpiar_numero(row.get('Volumen (m3)')), 
-                str(row.get('Turno', row.get('TURNO', ''))), limpiar_numero(row.get('ARENA HUMEDAD (%)')), 
-                limpiar_numero(row.get('Asentamiento Final (cm)')), limpiar_numero(row.get('Temp. (º C)')))
-        cursor.execute("INSERT INTO despachos (fecha, fuente_cemento, diseno_mezcla, lote, zona, wbs, volumen_m3, turno, arena_humedad_pct, asentamiento_final_cm, temperatura_c) VALUES (?,?,?,?,?,?,?,?,?,?,?)", vals)
+        vals = (
+            fecha,
+            str(row.get('Fuente de cemento','')),
+            str(row.get('Diseño de la Mezcla','')),
+            str(row.get('Lote #','')),
+            str(row.get('Zona','')),
+            str(row.get('WBS','')),
+            limpiar_numero(row.get('Volumen (m3)')),
+            str(row.get('Turno', row.get('TURNO', ''))),
+            limpiar_numero(row.get('ARENA HUMEDAD (%)')),
+            limpiar_numero(row.get('Asentamiento Final (cm)')),
+            limpiar_numero(row.get('Temp. (º C)')),
+            limpiar_numero(row.get('Arena (kg)')),
+            limpiar_numero(row.get('Grava (kg)')),
+            limpiar_numero(row.get('UCEM HE (kg)')),
+            limpiar_numero(row.get('UCEM IP (kg)')),
+            limpiar_numero(row.get('Agua (kg)')),
+            limpiar_numero(row.get('RHEO 1000 (kg)  Sika 115 (kg)')),
+            limpiar_numero(row.get('BASF 719 (kg)  Sika 200 (kg)')),
+            limpiar_numero(row.get('Delvo (litros)')),
+            limpiar_numero(row.get('MasterGlenium 7950')),
+            limpiar_numero(row.get('MasterGlenium 7970')),
+            limpiar_numero(row.get('Sika PP 48 (kg)-BARCHIP'))
+        )
+
+        cursor.execute("""INSERT INTO despachos (
+            fecha, fuente_cemento, diseno_mezcla, lote, zona, wbs, volumen_m3, turno,
+            arena_humedad_pct, asentamiento_final_cm, temperatura_c,
+            arena_kg, grava_kg, cemento_he_kg, cemento_ip_kg, agua_kg,
+            aditivo_rheo_sika115, aditivo_basf_sika200, aditivo_delvo,
+            aditivo_glenium_7950, aditivo_glenium_7970, aditivo_fibras
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals)
         c += 1
     print(f"   ↳ ✅ {c} despachos.")
 
