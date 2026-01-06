@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 import sys
 from pathlib import Path
 
@@ -219,51 +218,3 @@ if __name__ == "__main__":
         if respuesta in ['s', 'si', 'sí', 'yes', 'y']:
             print("\n Generando gráficas...")
             plot_statistics(stats)
-=======
-import pandas as pd
-
-from utils.loaders import get_db_connection_standalone
-
-def MLdatos():
-    conn = None
-    try:
-        conn = get_db_connection_standalone()
-        cursor = conn.execute(
-            """
-            SELECT
-                fecha,
-                fuente_cemento,
-                diseno_mezcla,
-                lote,
-                zona,
-                wbs,
-                volumen_m3,
-                turno,
-                arena_humedad_pct,
-                asentamiento_final_cm,
-                temperatura_c
-            FROM despachos
-            """
-        )
-
-        rows = cursor.fetchall()
-        columns = [col[0] for col in cursor.description]
-        return pd.DataFrame(rows, columns=columns)
-    except Exception as e:
-        print(f"Error al obtener datos: {e}")
-        return None
-    finally:
-        if conn:
-            conn.close()
-            
-            df = MLdatos()
-            if df is not None:
-                print("Primeras filas del dataset:")
-                print(df.head())
-                print("\nInformación del dataset:")
-                print(df.info())
-                print("\nEstadísticas descriptivas:")
-                print(df.describe())
-
-                
->>>>>>> Stashed changes
