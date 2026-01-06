@@ -65,10 +65,8 @@ def api_historial():
         return jsonify({"error": "Debes enviar 'inicio' y 'fin'."}), 400
 
    # 1. Filtrar por fecha
-    if inicio == fin:
-        resultados = buscar_por_fecha(inicio)
-    else:
-        resultados = buscar_por_rango(inicio, fin)
+    busqueda = buscar_por_rango(inicio, fin)
+    resultados = busqueda[0]
 
     # 2. Filtrar por diseño (si se envió)
     if diseno:
@@ -88,6 +86,15 @@ def api_historial():
     
     resultados_ordenados = [{campo: r.get(campo) for campo in orden} for r in resultados]
     
+    respuesta = {
+        "datos": resultados_ordenados,
+        "tiempos": {
+            "bst": round(busqueda[1], 6),
+            "avl": round(busqueda[2], 6)
+        },
+        "total": len(resultados_ordenados)
+    }
+
     return Response(json.dumps(resultados_ordenados, ensure_ascii=False), mimetype='application/json')
 
 # POST /api/agregar     -> recibe JSON (fecha, material, cantidad)
