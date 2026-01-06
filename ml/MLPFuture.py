@@ -18,25 +18,16 @@ from sklearn.model_selection import train_test_split
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from utils.loaders import get_db_connection_standalone
+from utils.loaders import cargar_datos_tabla
 
 MODEL_PATH = ROOT_DIR / "ml" / "Pfuture.pkl"
 
 
 def load_despachos() -> pd.DataFrame:
     """Carga los despachos y devuelve un DataFrame."""
-    conn = get_db_connection_standalone()
-    try:
-        query = """
-            SELECT
-                fecha,
-                volumen_m3
-            FROM despachos
-        """
-        df = pd.read_sql_query(query, conn)
-        return df
-    finally:
-        conn.close()
+    datos = cargar_datos_tabla("despachos")
+
+    return pd.DataFrame(datos)
 
 
 def prepare_daily_series(df: pd.DataFrame) -> pd.DataFrame:

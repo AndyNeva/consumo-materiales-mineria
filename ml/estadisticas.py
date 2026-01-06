@@ -7,46 +7,22 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils.loaders import get_db_connection_standalone
+from utils.loaders import cargar_datos_tabla
 
 # Configurar estilo de gráficos
 sns.set_style("whitegrid")
 plt.rcParams['figure.figsize'] = (12, 6)
 plt.rcParams['font.size'] = 10
 
-
 def MLdatos():
-    """Obtiene los datos de despachos desde la base de datos"""
-    conn = None
+    """Carga el dataset de despachos desde la base de datos y lo devuelve como DataFrame"""
     try:
-        conn = get_db_connection_standalone()
-        cursor = conn.execute(
-            """
-            SELECT
-                fecha,
-                fuente_cemento,
-                diseno_mezcla,
-                lote,
-                zona,
-                wbs,
-                volumen_m3,
-                turno,
-                arena_humedad_pct,
-                asentamiento_final_cm,
-                temperatura_c
-            FROM despachos
-            """
-        )
-
-        rows = cursor.fetchall()
-        columns = [col[0] for col in cursor.description]
-        return pd.DataFrame(rows, columns=columns)
+        datos = cargar_datos_tabla("despachos")
+        df = pd.DataFrame(datos)
+        return df
     except Exception as e:
-        print(f"Error al obtener datos: {e}")
+        print(f"Error al cargar los datos: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 
 def calculate_statistics(df):

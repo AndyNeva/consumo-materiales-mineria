@@ -12,49 +12,18 @@ from sklearn.preprocessing import StandardScaler
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from utils.loaders import get_db_connection_standalone
+from utils.loaders import cargar_datos_tabla
 
 # Configuración de rutas de artefactos
 MODEL_PATH = ROOT_DIR / "ml" / "modelo_hormigon.pkl"
 SCALER_PATH = ROOT_DIR / "ml" / "scaler_hormigon.pkl"
 
-def MLdatos():
-    """Obtiene los datos de despachos desde la base de datos"""
-    conn = None
-    try:
-        conn = get_db_connection_standalone()
-        cursor = conn.execute(
-            """
-            SELECT
-                fecha,
-                fuente_cemento,
-                diseno_mezcla,
-                lote,
-                zona,
-                wbs,
-                volumen_m3,
-                turno,
-                arena_humedad_pct,
-                asentamiento_final_cm,
-                temperatura_c
-            FROM despachos
-            """
-        )
-
-        rows = cursor.fetchall()
-        columns = [col[0] for col in cursor.description]
-        return pd.DataFrame(rows, columns=columns)
-    except Exception as e:
-        print(f"Error al obtener datos: {e}")
-        return None
-    finally:
-        if conn:
-            conn.close()
 
 def cargar_datos():
     """Carga los datos desde la base de datos"""
-    df = MLdatos()
-    return df
+    datos = cargar_datos_tabla("despachos")
+    return pd.DataFrame(datos)
+
 def preparar_datos(df):
     """Limpia y genera características para el modelo.
 
