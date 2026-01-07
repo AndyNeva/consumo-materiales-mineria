@@ -1,6 +1,6 @@
 # Importar librerías
 from flask import Flask, render_template, jsonify, request, Response
-from utils.loaders import cargar_datos_tabla
+from utils.loaders import cargar_datos_tabla, consumo_diario, registros_ultima_semana
 from ed.busquedas import buscar_por_fecha, buscar_por_rango, busqueda_por_diseno, busqueda_por_destino
 import os
 import json
@@ -95,11 +95,23 @@ def api_historial():
         "total": len(resultados_ordenados)
     }
 
-    return Response(json.dumps(resultados_ordenados, ensure_ascii=False), mimetype='application/json')
+    return Response(json.dumps(respuesta, ensure_ascii=False), mimetype='application/json')
 
 # POST /api/agregar     -> recibe JSON (fecha, material, cantidad)
 # GET  /api/proyeccion  -> devuelve predicción
 
+@app.route('api/dashboard')
+def api_dashboard():
+    consumo = consumo_diario()
+    registros_semanal, cantidad_registros_semanal = registros_ultima_semana()
+
+    respuesta ={
+        "consumo_diario":consumo,
+        "registros_ultima_semana":registros_semanal,
+        "cantidad_registros_semana":cantidad_registros_semanal
+    } 
+
+    return Response(json.dumps(respuesta, ensure_ascii=False), mimetype='application/json')
 
 
 
