@@ -1,6 +1,6 @@
 # Importar librerías
 from flask import Flask, render_template, jsonify, request, Response
-from utils.loaders import cargar_datos_tabla, consumo_diario, registros_ultima_semana
+from utils.loaders import consumo_diario, registros_ultima_semana
 from ed.busquedas import buscar_por_rango, busqueda_diseno_destino
 import os
 import json
