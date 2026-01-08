@@ -48,8 +48,7 @@ def api_buscar():
     
     if inicio and fin:
         return jsonify(buscar_por_rango(inicio, fin))
-    elif q:
-        return jsonify(buscar_por_fecha(q))
+   
     else:
         return jsonify([])
 
