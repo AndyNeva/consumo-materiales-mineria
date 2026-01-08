@@ -1,7 +1,7 @@
 # Importar librerías
 from flask import Flask, render_template, jsonify, request, Response
 from utils.loaders import cargar_datos_tabla
-from ed.busquedas import buscar_por_fecha, buscar_por_rango, busqueda_por_diseno, busqueda_por_destino
+from ed.busquedas import buscar_por_rango, busqueda_por_diseno, busqueda_por_destino
 import os
 import json
 
