@@ -73,7 +73,7 @@ def api_historial():
 # POST /api/agregar     -> recibe JSON (fecha, material, cantidad)
 # GET  /api/proyeccion  -> devuelve predicción
 
-@app.route('api/dashboard')
+@app.route('/api/dashboard')
 def api_dashboard():
     consumo = consumo_diario()
     registros_semanal, cantidad_registros_semanal = registros_ultima_semana()
