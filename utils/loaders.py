@@ -53,47 +53,6 @@ def cargar_datos_tabla(tabla: str):
     # Convertir sqlite3.Row a dict estándar
     return [dict(fila) for fila in datos]
 
-def consumo_diario():
-    try:
-        datos = cargar_datos_tabla('despachos')
-        hoy = date.today().isoformat()
-        consumo = 0
-        
-        for entrada in datos:
-            if entrada['fecha'] == hoy:
-                volumen = entrada.get('volumen_m3', 0)
-                if isinstance(volumen, (int, float)):
-                    consumo += volumen
-        
-        return consumo
-    except Exception as e:
-        print(f"Error al calcular consumo diario: {e}")
-        return 0
-
-def registros_ultima_semana():
-    try:
-        fechas = ultimos_7_dias()
-        datos = cargar_datos_tabla('despachos')
-        datos_finales = []
-
-        for entrada in datos:
-            if entrada.get('fecha') in fechas:
-                # Filtrar solo los campos que necesitas
-                registro_filtrado = {
-                    'fecha': entrada.get('fecha', ''),
-                    'diseno_mezcla': entrada.get('diseno_mezcla', ''),
-                    'zona': entrada.get('zona', ''),
-                    'wbs': entrada.get('wbs', ''),
-                    'volumen_m3': entrada.get('volumen_m3', 0)
-                }
-                datos_finales.append(registro_filtrado)
-        
-        total_registros = len(datos_finales)
-        return datos_finales, total_registros
-    except Exception as e:
-        print(f"Error al obtener registros de la última semana: {e}")
-        return [], 0
-
 
 def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, humedad_arena, asentamiento_final, temperatura):
     """
