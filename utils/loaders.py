@@ -94,7 +94,7 @@ def registros_ultima_semana():
         print(f"Error al obtener registros de la última semana: {e}")
         return [], 0
 
-def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, humedad_arena, asentamiento_final, temperatura):
+def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, turno, humedad_arena, asentamiento_final, temperatura):
     """
     Inserta un nuevo registro en la tabla 'despachos'.
 
@@ -123,6 +123,8 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, humedad_arena
     if not destino or not isinstance(destino, str):
         print("Error: Destino inválido o vacío")
         return None
+    if not turno or not isinstance(turno, str):
+        print("Error: Turno inválido o vacío")
     
     # Validar formato de fecha (YYYY-MM-DD)
     try:
@@ -159,7 +161,8 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, humedad_arena
         print(f"Error: Temperatura fuera de rango razonable (-10 a 60°C). Recibido: {temperatura}")
         return None
     
-    # Fuente cemento, turno, lote
+    # Fuente cemento
+    fuente_cemento = "DIS_LI744"
 
     try:
         # Conectar a la base de datos
@@ -181,14 +184,15 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, humedad_arena
         # Preparar la consulta SQL
         query = f"""
         INSERT INTO despachos (
-            fecha, volumen_m3, diseno_mezcla, wbs, zona,
+            fecha, fuente_cemento, volumen_m3, diseno_mezcla, wbs, zona,
             arena_humedad_pct, asentamiento_final_cm, temperatura_c,{", ".join(campos_receta)}
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, {', '.join(['?'] * len(campos_receta))})
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, {', '.join(['?'] * len(campos_receta))})
         """
 
         # Ejecutar la consulta con los parámetros
         cursor.execute(query, (
             fecha,
+            fuente_cemento,
             volumen,
             diseno_mezcla,
             wbs,
@@ -214,7 +218,7 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, humedad_arena
         print(f"Error al agregar nueva entrada: {e}")
         return None
 
-def insertar_material(material, stock, unidad, minimo):
+def insertar_material(material, stock, unidad, minimo, usuario_id):
     # Validar parámetros requeridos
     if not material or not isinstance(material, str):
         print("Error: Nombre de material inválido o vacío")
@@ -263,10 +267,6 @@ def insertar_material(material, stock, unidad, minimo):
         material_id = cursor.lastrowid
         # Consultar como ingresar
         fecha = date.today()
-
-        # sacar de la sesión
-        usuario_id = 1
-
         tipo = "INGRESO"
         # Definir si va o no
         proveedor = "Desconocido"
