@@ -37,20 +37,11 @@ def buscar_por_rango(fecha_inicio: str, fecha_fin:str):
     print(f"  AVL: {len(resultado_avl)} registros en {tiempo_avl:.6f}s")
     return resultado_avl, tiempo_bst, tiempo_avl
 
-def busqueda_por_diseno(datos:list[dict], diseno:str):
-    resultados = []
-    for entrada in datos:
-        if entrada['diseno_mezcla'] ==diseno:
-            resultados.append(entrada)
-    
-    return resultados
-
-def busqueda_por_destino(datos:list[dict], destino:str):
-    resultados = []
-    for entrada in datos:
-        if entrada['zona'] ==destino:
-            resultados.append(entrada)
-    
-    return resultados
+def busqueda_diseno_destino(datos:list[dict], diseno=None, destino=None):
+    return [
+        registro for registro in datos
+        if (diseno is None or registro['diseno_mezcla'] == diseno)
+        and (destino is None or registro['zona'] == destino)
+    ]
 
 buscar_por_rango('2025-11-15', '2025-11-20')

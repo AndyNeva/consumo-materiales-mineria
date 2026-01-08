@@ -1,7 +1,7 @@
 # Importar librerías
 from flask import Flask, render_template, jsonify, request, Response
-from utils.loaders import cargar_datos_tabla
-from ed.busquedas import buscar_por_rango, busqueda_por_diseno, busqueda_por_destino
+from utils.loaders import consumo_diario, registros_ultima_semana
+from ed.busquedas import buscar_por_rango, busqueda_diseno_destino
 import os
 import json
 
@@ -29,29 +29,6 @@ def dashboard():
 
 # DEFINICIÓN DE APIs
 
-@app.route("/api/datos")
-def api_datos():
-    try:
-        datos = cargar_datos_tabla('despachos')
-        return jsonify(datos)
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# GET  /api/buscar      -> recibe ?texto=
-@app.route('/api/buscar')
-def api_buscar():
-    # Pendiente: confirmar nombres de parámetros con frontend
-    q = request.args.get('q')  
-    inicio = request.args.get('inicio')
-    fin = request.args.get('fin')
-    
-    if inicio and fin:
-        return jsonify(buscar_por_rango(inicio, fin))
-   
-    else:
-        return jsonify([])
-
 @app.route('/api/historial')
 def api_historial():
     
@@ -65,15 +42,12 @@ def api_historial():
 
    # 1. Filtrar por fecha
     busqueda = buscar_por_rango(inicio, fin)
-    resultados = busqueda[0]
+    resultados_fecha = busqueda[0]
 
-    # 2. Filtrar por diseño (si se envió)
-    if diseno:
-        resultados = busqueda_por_diseno(resultados, diseno)
-
-    # 3. Filtrar por destino (si se envió)
-    if destino:
-        resultados = busqueda_por_destino(resultados, destino)
+    # 2. Filtrar por diseño y/o destino (si se envió)
+    resultados = busqueda_diseno_destino(resultados_fecha, 
+        diseno=diseno if diseno else None,
+        destino=destino if destino else None)
 
 
     # Normalizar orden de campos
@@ -94,11 +68,23 @@ def api_historial():
         "total": len(resultados_ordenados)
     }
 
-    return Response(json.dumps(resultados_ordenados, ensure_ascii=False), mimetype='application/json')
+    return Response(json.dumps(respuesta, ensure_ascii=False), mimetype='application/json')
 
 # POST /api/agregar     -> recibe JSON (fecha, material, cantidad)
 # GET  /api/proyeccion  -> devuelve predicción
 
+@app.route('/api/dashboard')
+def api_dashboard():
+    consumo = consumo_diario()
+    registros_semanal, cantidad_registros_semanal = registros_ultima_semana()
+
+    respuesta ={
+        "consumo_diario":consumo,
+        "registros_ultima_semana":registros_semanal,
+        "cantidad_registros_semana":cantidad_registros_semanal
+    } 
+
+    return Response(json.dumps(respuesta, ensure_ascii=False), mimetype='application/json')
 
 
 
