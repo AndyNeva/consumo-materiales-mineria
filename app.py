@@ -1,6 +1,6 @@
 # Importar librerías
 from flask import Flask, render_template, jsonify, request, Response
-from utils.loaders import consumo_diario, registros_ultima_semana
+from utils.loaders import consumo_diario, registros_ultima_semana, alertas_inventario
 from ed.busquedas import buscar_por_rango, busqueda_diseno_destino
 import os
 import json
@@ -78,10 +78,15 @@ def api_dashboard():
     consumo = consumo_diario()
     registros_semanal, cantidad_registros_semanal = registros_ultima_semana()
 
+    alertas, alertas_cant = alertas_inventario()
+
+
     respuesta ={
         "consumo_diario":consumo,
         "registros_ultima_semana":registros_semanal,
-        "cantidad_registros_semana":cantidad_registros_semanal
+        "cantidad_registros_semana":cantidad_registros_semanal,
+        "alertas_inventario": alertas,
+        "cantidad_alertas_inventario":alertas_cant
     } 
 
     return Response(json.dumps(respuesta, ensure_ascii=False), mimetype='application/json')

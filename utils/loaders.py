@@ -94,6 +94,42 @@ def registros_ultima_semana():
         print(f"Error al obtener registros de la última semana: {e}")
         return [], 0
 
+def alertas_inventario():
+    materiales = cargar_datos_tabla('materiales')
+    alertas_cant=0
+    alertas =[]
+
+    for material in materiales:
+        if material['saldo'] <= material['minimo']:
+            alertas_cant +=1
+            bajo = {'material': material['nombre'], 'stock':material['saldo'], 'minimo':material['minimo'],'estado':'bajo'}
+            alertas.append(bajo)
+        else:
+            ok = {'material': material['nombre'], 'stock':material['saldo'], 'minimo':material['minimo'],'estado':'ok'}
+            alertas.append(ok)
+    
+    return alertas, alertas_cant
+
+def receta_actual(diseno):
+    try:
+        # Conectar a la base de datos
+        conn = obtener_conexion_autonoma()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT * FROM recetas WHERE diseno_mezcla = ?", (diseno,))
+        receta = cursor.fetchone()
+
+         # Validar que existe la receta
+        if not receta:
+            print(f"Error: No se encontró la receta para {diseno}")
+            conn.close()
+            return None
+        return receta
+
+    except sqlite3.Error as e:
+        print(f"Error al seleccionar receta: {e}")
+        return None
+
 def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, turno, humedad_arena, asentamiento_final, temperatura):
     """
     Inserta un nuevo registro en la tabla 'despachos'.
@@ -169,14 +205,13 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, turno, humeda
         conn = obtener_conexion_autonoma()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT * FROM recetas WHERE diseno_mezcla = ?", (diseno_mezcla,))
-        receta = cursor.fetchone()
+        # Obtener el último número de lote
+        cursor.execute("SELECT MAX(CAST(lote AS INTEGER)) FROM despachos WHERE lote NOT NULL AND lote != ''")
+        resultado = cursor.fetchone()
+        ultimo_lote = resultado[0] if resultado[0] is not None else 0
+        nuevo_lote = str(ultimo_lote + 1)
 
-         # Validar que existe la receta
-        if not receta:
-            print(f"Error: No se encontró la receta para {diseno_mezcla}")
-            conn.close()
-            return None
+        receta = receta_actual(diseno_mezcla)
 
         campos_receta = ["cemento_kg", "arena_kg", "grava_kg", "agua_kg", "aditivo_a", "aditivo_b", "aditivo_delvo", "aditivo_glenium_7950", "aditivo_glenium_7970", "aditivo_fibra"]
         valores_receta = [receta[campo] for campo in campos_receta]
@@ -184,9 +219,9 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, turno, humeda
         # Preparar la consulta SQL
         query = f"""
         INSERT INTO despachos (
-            fecha, fuente_cemento, volumen_m3, diseno_mezcla, wbs, zona,
+            fecha, fuente_cemento, volumen_m3, diseno_mezcla, lote, wbs, zona,
             arena_humedad_pct, asentamiento_final_cm, temperatura_c,{", ".join(campos_receta)}
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, {', '.join(['?'] * len(campos_receta))})
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {', '.join(['?'] * len(campos_receta))})
         """
 
         # Ejecutar la consulta con los parámetros
@@ -195,6 +230,7 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, turno, humeda
             fuente_cemento,
             volumen,
             diseno_mezcla,
+            nuevo_lote,
             wbs,
             destino,
             humedad_arena,
@@ -217,6 +253,32 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, turno, humeda
     except sqlite3.Error as e:
         print(f"Error al agregar nueva entrada: {e}")
         return None
+
+
+def cambiar_stock(diseno, volumen):
+    if not diseno or not isinstance(diseno, str):
+        print("Error: Diseño de mezcla inválido o vacío")
+        return None
+    
+    try:
+        volumen = float(volumen)
+    except (ValueError, TypeError):
+        print("Error: El volumen es inválido")
+        return None
+    
+    try:
+        # Conectar a la base de datos
+        conn = obtener_conexion_autonoma()
+        cursor = conn.cursor()
+
+        receta = receta_actual(diseno)
+        materiales = cargar_datos_tabla('materiales')
+
+
+    except sqlite3.Error as e:
+        print(f"Error al cambiar el stock: {e}")
+        return None
+        
 
 def insertar_material(material, stock, unidad, minimo, usuario_id):
     # Validar parámetros requeridos
