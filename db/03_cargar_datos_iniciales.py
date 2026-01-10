@@ -1,7 +1,7 @@
 import pandas as pd
 import sqlite3
 import os
-from utils.helpers import limpiar_numero
+from utilidades import limpiar_numero
 
 # --------------------------------------------------
 # CONFIGURACIÓN
@@ -50,7 +50,7 @@ def cargar_datos():
                 arena_kg, grava_kg, cemento_kg, agua_kg,
                 aditivo_rheo_sika115, aditivo_basf_sika200, aditivo_delvo,
                 aditivo_glenium_7950, aditivo_glenium_7970, aditivo_fibras
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             fecha,
             str(row.get('Fuente de cemento','')),
