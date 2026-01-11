@@ -104,6 +104,13 @@ def crear_esquema():
             aditivo_fibras REAL
         )
     ''')
+    #tabla de demanda
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS daily_demand (
+            date TEXT PRIMARY KEY,
+            volume_m3 REAL NOT NULL
+        )
+    ''')
 
     # Tabla de recetas
     cursor.execute('''
