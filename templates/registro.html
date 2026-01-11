@@ -553,6 +553,16 @@ select option{
         <label for="regVolumen">Volumen producido (m³)</label>
         <input id="regVolumen" type="number" step="0.01" min="0" required placeholder="Ej: 120.5" />
       </div>
+
+      <div class="field">
+        <label for="regTurno">Turno</label>
+        <select id="regTurno" required>
+          <option value="">Seleccione turno</option>
+          <option value="Diurno">Diurno</option>
+          <option value="Nocturno">Nocturno</option>
+        </select>
+      </div>
+
     </div>
 
     <div class="row" style="margin-top:12px;">
@@ -898,6 +908,10 @@ function findInvItemByName(name){
     const volumen = safeNum(document.getElementById("regVolumen").value);
     const diseno = document.getElementById("regDiseno").value;
 
+    const turno = (document.getElementById("regTurno").value || "").trim();
+
+    const turno = (document.getElementById("regTurno").value || "").trim();
+
     const wbs = (document.getElementById("regWBS").value || "").trim();
     const destino = (document.getElementById("regDestino").value || "").trim();
     const humedadArena = safeNum(document.getElementById("regHumedad").value);
@@ -909,6 +923,7 @@ function findInvItemByName(name){
     if (!Number.isFinite(volumen) || volumen <= 0){ showRegistroAlert("warn","Volumen inválido","Ingresa un volumen > 0."); return; }
     if (!diseno){ showRegistroAlert("warn","Falta diseño","Selecciona un diseño de mezcla."); return; }
 
+    if (!turno){ showRegistroAlert("warn","Falta turno","Selecciona el turno (Diurno/Nocturno)."); return; }
     if (!wbs){ showRegistroAlert("warn","Falta WBS","Ingresa el WBS."); return; }
     if (!destino){ showRegistroAlert("warn","Falta destino","Ingresa el destino de la producción."); return; }
     if (!Number.isFinite(humedadArena)){ showRegistroAlert("warn","Humedad inválida","Ingresa la humedad de la arena (%)."); return; }
@@ -933,6 +948,7 @@ function findInvItemByName(name){
     if (!fecha){ toast("bad","Falta fecha","Selecciona una fecha."); return; }
     if (!Number.isFinite(volumen) || volumen <= 0){ toast("bad","Volumen inválido","Ingresa un volumen > 0."); return; }
     if (!diseno){ toast("bad","Falta diseño","Selecciona un diseño de mezcla."); return; }
+    if (!turno){ toast("bad","Falta turno","Selecciona el turno (Diurno/Nocturno)."); return; }
 
     const res = compute(diseno, volumen);
     renderCalc(res.items);
@@ -953,7 +969,7 @@ function findInvItemByName(name){
 
     const consumosDia = res.items.filter(x => !x.noInv).map(x => ({ material: x.material, cantidad: x.consumo, unidad: x.unidad }));
 
-    registros.push({ id: uid(), fecha, produccion: volumen, volumen, diseno, wbs, destino, humedadArena, asentamientoFinal, tempMezcla, consumos: consumosDia });
+    registros.push({ id: uid(), fecha, turno, produccion: volumen, volumen, diseno, wbs, destino, humedadArena, asentamientoFinal, tempMezcla, consumos: consumosDia });
 
     saveInventario();
     saveRegistros();
