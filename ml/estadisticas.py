@@ -1,269 +1,224 @@
-<<<<<<< Updated upstream
-import sys
+import os
 from pathlib import Path
 
-# Agregar el directorio raíz al path de Python
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
-from utils.loaders import cargar_datos_tabla
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from tkinter import Tk, Toplevel, Text, Scrollbar, Button, filedialog, messagebox
 
-# Configurar estilo de gráficos
-sns.set_style("whitegrid")
-plt.rcParams['figure.figsize'] = (12, 6)
-plt.rcParams['font.size'] = 10
+ROOT = Tk()
+ROOT.withdraw()  # Oculta la ventana principal de Tk
 
-def MLdatos():
-    """Carga el dataset de despachos desde la base de datos y lo devuelve como DataFrame"""
+# Cargar el archivo CSV desde el mismo directorio del script
+BASE_DIR = Path(__file__).resolve().parent
+DATOS = BASE_DIR / "Datos_Stat_Model.csv"
+
+if not DATOS.exists():
+    raise FileNotFoundError(f"No se encontro el archivo de datos esperado en {DATOS}")
+
+df = pd.read_csv(DATOS)
+
+# Conversión robusta de columnas numéricas
+MATERIALES_COLS = ['Arena (kg)', 'Grava (kg)', 'Cemento (kg)', 'Agua (kg)']
+
+# Definir aditivos antes de usarlos en limpieza
+ADITIVOS_COLS = [
+    'RHEO 1000 (kg)',
+    'BASF 719 (kg)',
+    'Delvo (litros)',
+    'MasterGlenium 7950',
+    'MasterGlenium 7970',
+    'Sika PP 48 (kg)-BARCHIP',
+]
+
+def limpiar_dataframe(df):
+    """Convierte a numéricas las columnas relevantes y elimina filas completamente vacías.
+    No falla si faltan columnas: solo convierte las que existan.
+    """
+    columnas_a_convertir = [c for c in MATERIALES_COLS + ADITIVOS_COLS if c in df.columns]
+    if columnas_a_convertir:
+        df[columnas_a_convertir] = df[columnas_a_convertir].apply(pd.to_numeric, errors='coerce')
+    # Eliminar filas sin información en columnas clave
+    if columnas_a_convertir:
+        df = df.dropna(how='all', subset=columnas_a_convertir)
+    return df
+
+df = limpiar_dataframe(df)
+
+
+def guardar_figura(fig, default_name):
+    """Abre un diálogo para exportar la figura a imagen."""
+    ruta = filedialog.asksaveasfilename(
+        parent=ROOT,
+        defaultextension=".png",
+        filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg"), ("Todos", "*.*")],
+        initialfile=default_name,
+        title="Guardar gráfico",
+    )
+
+    if ruta:
+        fig.savefig(ruta, dpi=300, bbox_inches='tight')
+        messagebox.showinfo("Exportar", f"Gráfico exportado en {ruta}")
+
+
+def mostrar_figura_en_ventana(fig, titulo, default_name="grafico.png"):
+    """Muestra una figura de Matplotlib en una ventana con opción de exportar."""
+    ventana = Toplevel(ROOT)
+    ventana.title(titulo)
+
+    canvas = FigureCanvasTkAgg(fig, master=ventana)
+    canvas.draw()
+    canvas.get_tk_widget().pack(fill='both', expand=True)
+
+    Button(
+        ventana,
+        text="Exportar gráfico",
+        command=lambda: guardar_figura(fig, default_name),
+    ).pack(side='bottom', pady=8)
+
+def mostrar_resultados_en_ventana(titulo, contenido):
+    """Muestra resultados en una ventana de texto."""
+    ventana = Toplevel(ROOT)
+    ventana.title(titulo)
+
+    text_area = Text(ventana, wrap='word', height=20, width=100)
+    scroll = Scrollbar(ventana, command=text_area.yview)
+    text_area.configure(yscrollcommand=scroll.set)
+    text_area.insert('1.0', contenido)
+    text_area.pack(side='left', fill='both', expand=True)
+    scroll.pack(side='right', fill='y')
+
+def generar_resumen_numerico(df):
+    """Genera y muestra un resumen numérico de materiales y aditivos."""
+    columnas_materiales = ['Arena (kg)', 'Grava (kg)', 'Cemento (kg)', 'Agua (kg)']
+    columnas_todas = [c for c in columnas_materiales + ADITIVOS_COLS if c in df.columns]
+    if not columnas_todas:
+        messagebox.showwarning("Resumen", "No hay columnas de materiales/aditivos presentes para resumir.")
+        return
+    resumen = df[columnas_todas].describe()
+    mostrar_resultados_en_ventana("Resumen Numérico (Materiales y Aditivos)", resumen.to_string())
+
+def graficar_boxplot_materiales(df):
+    """Genera un boxplot de los materiales usados para el concreto."""
+    columnas_presentes = [c for c in ['Arena (kg)', 'Grava (kg)', 'Cemento (kg)', 'Agua (kg)'] if c in df.columns]
+    if not columnas_presentes:
+        messagebox.showwarning("Boxplot materiales", "No hay columnas de materiales presentes para graficar.")
+        return
+    fig, ax = plt.subplots(figsize=(12, 6))
+    df[columnas_presentes].boxplot(ax=ax)
+    ax.set_title('Boxplot de los materiales usados para el concreto')
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    mostrar_figura_en_ventana(fig, "Boxplot de materiales", default_name="boxplot_materiales.png")
+    plt.close(fig)
+
+def graficar_frecuencia_disenos(df):
+    """Genera un gráfico de barras con la frecuencia de diseños de mezcla."""
     try:
-        datos = cargar_datos_tabla("despachos")
-        df = pd.DataFrame(datos)
-        return df
-    except Exception as e:
-        print(f"Error al cargar los datos: {e}")
-        return None
+        mix_counts = df['Diseño de la Mezcla'].value_counts()
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.bar(mix_counts.index, mix_counts.values)
+        ax.set_title('Frecuencia de Diseños de Mezcla')
+        ax.set_xlabel('Diseño')
+        ax.set_ylabel('Frecuencia')
+        plt.setp(ax.get_xticklabels(), rotation=90, ha='center')
+        mostrar_figura_en_ventana(fig, "Frecuencia de diseños", default_name="frecuencia_disenos.png")
+        plt.close(fig)
+    except KeyError as e:
+        print(f"Error: {e}. Verifique que la columna 'Diseño de la Mezcla' exista en el DataFrame.")
+
+def graficar_matriz_correlacion(df):
+    """Genera un mapa de calor con la matriz de correlación."""
+    heatmap_cols = ['Arena (kg)', 'Grava (kg)', 'Cemento (kg)', 'Agua (kg)', 'Volumen (m3)']
+    presentes = [c for c in heatmap_cols if c in df.columns]
+    if len(presentes) < 2:
+        messagebox.showwarning("Correlación", "Se requieren al menos 2 columnas para correlacionar.")
+        return
+    heatmap_data = df[presentes]
+    corr = heatmap_data.corr(numeric_only=True)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(corr, annot=True, cmap='coolwarm', fmt='.2f', ax=ax)
+    ax.set_title('Mapa de Calor de Correlaciones entre Materiales y Volumen')
+    mostrar_figura_en_ventana(fig, "Matriz de correlación", default_name="matriz_correlacion.png")
+    plt.close(fig)
 
 
-def calculate_statistics(df):
-    """Calcula 10 estadísticos graficables del dataset"""
-    stats = {}
-    
-    # 1. Promedio de volumen por zona
-    stats['volumen_promedio_por_zona'] = df.groupby('zona')['volumen_m3'].mean()
-    
-    # 2. Cantidad de despachos por turno
-    stats['despachos_por_turno'] = df['turno'].value_counts()
-    
-    # 3. Asentamiento promedio por fuente de cemento
-    stats['asentamiento_por_cemento'] = df.groupby('fuente_cemento')['asentamiento_final_cm'].mean()
-    
-    # 4. Humedad de arena promedio por zona
-    stats['humedad_arena_por_zona'] = df.groupby('zona')['arena_humedad_pct'].mean()
-    
-    # 5. Temperatura promedio por turno
-    stats['temperatura_por_turno'] = df.groupby('turno')['temperatura_c'].mean()
-    
-    # 6. Despachos por lote
-    stats['despachos_por_lote'] = df['lote'].value_counts()
-    
-    # 7. Volumen total por diseño de mezcla
-    stats['volumen_total_por_diseno'] = df.groupby('diseno_mezcla')['volumen_m3'].sum()
-    
-    # 8. Asentamiento por diseño de mezcla
-    stats['asentamiento_por_diseno'] = df.groupby('diseno_mezcla')['asentamiento_final_cm'].mean()
-    
-    # 9. Despachos por WBS
-    stats['despachos_por_wbs'] = df['wbs'].value_counts()
-    
-    # 10. Correlación entre volumen y asentamiento
-    stats['correlacion_volumen_asentamiento'] = df['volumen_m3'].corr(df['asentamiento_final_cm'])
-    
-    return stats
+def estadisticos_aditivos(df):
+    """Muestra tabla descriptiva de aditivos."""
+    presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+    if not presentes:
+        messagebox.showwarning("Aditivos", "No hay columnas de aditivos presentes para resumir.")
+        return
+    desc = df[presentes].describe()
+    mostrar_resultados_en_ventana(
+        "Estadísticos de aditivos",
+        desc.to_string()
+    )
 
 
-def plot_statistics(stats):
-    """Genera gráficos en ventanas emergentes para cada estadístico"""
-    
-    # 1. Gráfico de barras: Volumen promedio por zona (Top 15)
-    plt.figure(figsize=(14, 6))
-    top_zonas = stats['volumen_promedio_por_zona'].nlargest(15)
-    plt.bar(range(len(top_zonas)), top_zonas.values, color='steelblue', alpha=0.7)
-    plt.xticks(range(len(top_zonas)), top_zonas.index, rotation=45, ha='right')
-    plt.xlabel('Zona')
-    plt.ylabel('Volumen Promedio (m³)')
-    plt.title('Top 15 Zonas por Volumen Promedio de Despacho')
-    plt.tight_layout()
-    plt.show()
-    
-    # 2. Gráfico de pastel: Despachos por turno
-    plt.figure(figsize=(8, 8))
-    colors = ["#c15ed2", "#336393", "#64cd64"]
-    stats['despachos_por_turno'].plot(kind='pie', autopct='%1.1f%%', colors=colors, startangle=90)
-    plt.ylabel('')
-    plt.title('Distribución de Despachos por Turno')
-    plt.tight_layout()
-    plt.show()
-    
-    # 3. Gráfico de barras: Asentamiento promedio por fuente de cemento
-    plt.figure(figsize=(10, 6))
-    stats['asentamiento_por_cemento'].plot(kind='bar', color='coral', alpha=0.7)
-    plt.xlabel('Fuente de Cemento')
-    plt.ylabel('Asentamiento Promedio (cm)')
-    plt.title('Asentamiento Promedio por Fuente de Cemento')
-    plt.xticks(rotation=0)
-    plt.tight_layout()
-    plt.show()
-    
-    # 4. Gráfico de barras horizontales: Humedad de arena por zona (Top 20)
-    plt.figure(figsize=(10, 8))
-    top_humedad = stats['humedad_arena_por_zona'].nlargest(20)
-    plt.barh(range(len(top_humedad)), top_humedad.values, color='lightgreen', alpha=0.7)
-    plt.yticks(range(len(top_humedad)), top_humedad.index)
-    plt.xlabel('Humedad Promedio (%)')
-    plt.ylabel('Zona')
-    plt.title('Top 20 Zonas por Humedad de Arena Promedio')
-    plt.tight_layout()
-    plt.show()
-    
-    # 5. Gráfico de barras: Temperatura promedio por turno
-    plt.figure(figsize=(10, 6))
-    stats['temperatura_por_turno'].plot(kind='bar', color='orange', alpha=0.7)
-    plt.xlabel('Turno')
-    plt.ylabel('Temperatura Promedio (°C)')
-    plt.title('Temperatura Promedio por Turno')
-    plt.xticks(rotation=45)
-    plt.axhline(y=stats['temperatura_por_turno'].mean(), color='r', linestyle='--', 
-                label=f'Media: {stats["temperatura_por_turno"].mean():.2f}°C')
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-    
-    # 6. Gráfico de barras: Despachos por lote (Top 10)
-    plt.figure(figsize=(12, 6))
-    top_lotes = stats['despachos_por_lote'].head(10)
-    plt.bar(range(len(top_lotes)), top_lotes.values, color='purple', alpha=0.7)
-    plt.xticks(range(len(top_lotes)), top_lotes.index, rotation=45, ha='right')
-    plt.xlabel('Lote')
-    plt.ylabel('Cantidad de Despachos')
-    plt.title('Top 10 Lotes por Cantidad de Despachos')
-    plt.tight_layout()
-    plt.show()
-    
-    # 7. Gráfico de barras horizontales: Volumen total por diseño de mezcla (Top 15)
-    plt.figure(figsize=(12, 8))
-    top_disenos = stats['volumen_total_por_diseno'].nlargest(15)
-    plt.barh(range(len(top_disenos)), top_disenos.values, color='teal', alpha=0.7)
-    plt.yticks(range(len(top_disenos)), top_disenos.index)
-    plt.xlabel('Volumen Total (m³)')
-    plt.ylabel('Diseño de Mezcla')
-    plt.title('Top 15 Diseños de Mezcla por Volumen Total')
-    plt.tight_layout()
-    plt.show()
-    
-    # 8. Gráfico de barras: Asentamiento por diseño de mezcla (Top 15)
-    plt.figure(figsize=(14, 6))
-    top_asentamiento = stats['asentamiento_por_diseno'].nlargest(15)
-    plt.bar(range(len(top_asentamiento)), top_asentamiento.values, color='salmon', alpha=0.7)
-    plt.xticks(range(len(top_asentamiento)), top_asentamiento.index, rotation=45, ha='right')
-    plt.xlabel('Diseño de Mezcla')
-    plt.ylabel('Asentamiento Promedio (cm)')
-    plt.title('Top 15 Diseños de Mezcla por Asentamiento Promedio')
-    plt.tight_layout()
-    plt.show()
-    
-    # 9. Gráfico de barras: Despachos por WBS (Top 10)
-    plt.figure(figsize=(12, 6))
-    top_wbs = stats['despachos_por_wbs'].head(10)
-    plt.bar(range(len(top_wbs)), top_wbs.values, color='navy', alpha=0.7)
-    plt.xticks(range(len(top_wbs)), top_wbs.index, rotation=45, ha='right')
-    plt.xlabel('WBS')
-    plt.ylabel('Cantidad de Despachos')
-    plt.title('Top 10 WBS por Cantidad de Despachos')
-    plt.tight_layout()
-    plt.show()
-    
-    # 10. Gráfico de texto: Correlación volumen-asentamiento
-    fig, ax = plt.figure(figsize=(8, 6)), plt.gca()
-    corr_value = stats['correlacion_volumen_asentamiento']
-    
-    # Determinar color y descripción basado en el valor de correlación
-    if abs(corr_value) < 0.3:
-        color = 'gray'
-        descripcion = 'Correlación Débil'
-    elif abs(corr_value) < 0.7:
-        color = 'orange'
-        descripcion = 'Correlación Moderada'
-    else:
-        color = 'green'
-        descripcion = 'Correlación Fuerte'
-    
-    ax.text(0.5, 0.6, f'{corr_value:.4f}', 
-            ha='center', va='center', fontsize=80, color=color, weight='bold')
-    ax.text(0.5, 0.3, descripcion, 
-            ha='center', va='center', fontsize=20, color=color)
-    ax.text(0.5, 0.15, 'Correlación entre Volumen y Asentamiento', 
-            ha='center', va='center', fontsize=14, style='italic')
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.axis('off')
-    plt.title('Correlación Volumen (m³) vs Asentamiento (cm)', fontsize=16, pad=20)
-    plt.tight_layout()
-    plt.show()
-    
-    print("\n Todas las gráficas han sido generadas y mostradas")
+def graficar_aditivos_boxplot(df):
+    """Boxplot de aditivos."""
+    presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+    if not presentes:
+        messagebox.showwarning("Boxplot aditivos", "No hay columnas de aditivos presentes para graficar.")
+        return
+    fig, ax = plt.subplots(figsize=(12, 6))
+    df[presentes].boxplot(ax=ax)
+    ax.set_title('Boxplot de aditivos')
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    mostrar_figura_en_ventana(fig, "Boxplot de aditivos", default_name="boxplot_aditivos.png")
+    plt.close(fig)
+
+
+def graficar_aditivos_histograma(df):
+    """Histograma de aditivos."""
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        columnas_presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+        if not columnas_presentes:
+            raise KeyError("No hay columnas de aditivos presentes en el DataFrame.")
+        datasets = [df[c].dropna().values for c in columnas_presentes]
+        ax.hist(datasets, bins=20, label=columnas_presentes, alpha=0.6)
+        ax.set_title('Histograma de aditivos')
+        ax.set_xlabel('Cantidad')
+        ax.set_ylabel('Frecuencia')
+        ax.legend()
+        mostrar_figura_en_ventana(fig, "Histograma de aditivos", default_name="histograma_aditivos.png")
+        plt.close(fig)
+    except KeyError as e:
+        print(f"Error: {e}. Verifique que las columnas de aditivos existan en el DataFrame.")
+
+
+def graficar_aditivos_heatmap(df):
+    """Mapa de calor de correlación de aditivos."""
+    presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+    if len(presentes) < 2:
+        messagebox.showwarning("Correlación aditivos", "Se requieren al menos 2 columnas de aditivos para correlacionar.")
+        return
+    corr = df[presentes].corr(numeric_only=True)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(corr, annot=True, cmap='coolwarm', fmt='.2f', ax=ax)
+    ax.set_title('Mapa de calor de correlación de aditivos')
+    mostrar_figura_en_ventana(fig, "Correlación de aditivos", default_name="correlacion_aditivos.png")
+    plt.close(fig)
+
+
+def lanzar_menu():
+    """Muestra una ventana con botones para ejecutar cada análisis."""
+    ROOT.deiconify()
+    ROOT.title("Panel de análisis de materiales")
+
+    Button(ROOT, text="Resumen numérico", width=30, command=lambda: generar_resumen_numerico(df)).pack(pady=5)
+    Button(ROOT, text="Boxplot de materiales", width=30, command=lambda: graficar_boxplot_materiales(df)).pack(pady=5)
+    Button(ROOT, text="Frecuencia de diseños", width=30, command=lambda: graficar_frecuencia_disenos(df)).pack(pady=5)
+    Button(ROOT, text="Matriz de correlación de materiales", width=30, command=lambda: graficar_matriz_correlacion(df)).pack(pady=5)
+    Button(ROOT, text="Boxplot de aditivos", width=30, command=lambda: graficar_aditivos_boxplot(df)).pack(pady=5)
+    Button(ROOT, text="Histograma de aditivos", width=30, command=lambda: graficar_aditivos_histograma(df)).pack(pady=5)
+    Button(ROOT, text="Heatmap de aditivos", width=30, command=lambda: graficar_aditivos_heatmap(df)).pack(pady=5)
+    Button(ROOT, text="Salir", width=30, command=ROOT.destroy).pack(pady=10)
+
+    ROOT.mainloop()
 
 
 if __name__ == "__main__":
-    df = MLdatos()
-    if df is not None:
-        print("Primeras filas del dataset:")
-        print(df.head())
-        print("\nInformación del dataset:")
-        print(df.info())
-        print("\nEstadísticas descriptivas:")
-        print(df.describe())
-        
-        print("\n" + "="*50)
-        print("ESTADÍSTICOS CALCULADOS")
-        print("="*50)
-        
-        stats = calculate_statistics(df)
-        for nombre, valor in stats.items():
-            print(f"\n{nombre}:")
-            print(valor)
-        
-        # Preguntar si desea ver las gráficas
-        respuesta = input("¿Desea ver las gráficas en ventanas emergentes? (s/n): ").strip().lower()
-        if respuesta in ['s', 'si', 'sí', 'yes', 'y']:
-            print("\n Generando gráficas...")
-            plot_statistics(stats)
-=======
-import pandas as pd
-
-from utils.loaders import get_db_connection_standalone
-
-def MLdatos():
-    conn = None
-    try:
-        conn = get_db_connection_standalone()
-        cursor = conn.execute(
-            """
-            SELECT
-                fecha,
-                fuente_cemento,
-                diseno_mezcla,
-                lote,
-                zona,
-                wbs,
-                volumen_m3,
-                turno,
-                arena_humedad_pct,
-                asentamiento_final_cm,
-                temperatura_c
-            FROM despachos
-            """
-        )
-
-        rows = cursor.fetchall()
-        columns = [col[0] for col in cursor.description]
-        return pd.DataFrame(rows, columns=columns)
-    except Exception as e:
-        print(f"Error al obtener datos: {e}")
-        return None
-    finally:
-        if conn:
-            conn.close()
-            
-            df = MLdatos()
-            if df is not None:
-                print("Primeras filas del dataset:")
-                print(df.head())
-                print("\nInformación del dataset:")
-                print(df.info())
-                print("\nEstadísticas descriptivas:")
-                print(df.describe())
-
-                
->>>>>>> Stashed changes
+    lanzar_menu()

@@ -1,156 +1,293 @@
-#!/usr/bin/env python3
-"""
-Modelo para predecir consumo futuro de concreto (volumen_m3) a partir de fechas.
-Genera un modelo regresor y lo exporta como Pfuture.pkl.
-"""
-
-import sys
+import pickle
 from pathlib import Path
-from datetime import timedelta
-import joblib
+
 import pandas as pd
-from sklearn.ensemble import GradientBoostingRegressor
-from math import sqrt
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import train_test_split
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from xgboost import XGBRegressor
 
-# Añadir raíz del proyecto al path para usar utils
-ROOT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT_DIR))
+# Cargar el archivo CSV desde el mismo directorio del script
+BASE_DIR = Path(__file__).resolve().parent
+DATOS = BASE_DIR / "Datos_Stat_Model.csv"
 
-from utils.loaders import cargar_datos_tabla
+if not DATOS.exists():
+    raise FileNotFoundError(f"No se encontró el archivo de datos esperado en {DATOS}")
 
-MODEL_PATH = ROOT_DIR / "ml" / "Pfuture.pkl"
+df = pd.read_csv(DATOS)
 
+# Eliminar datos faltantes
+df = df.dropna()
 
-def load_despachos() -> pd.DataFrame:
-    """Carga los despachos y devuelve un DataFrame."""
-    datos = cargar_datos_tabla("despachos")
+# Verificar que tenemos suficientes datos
+if len(df) < 10:
+    raise ValueError(f"No hay suficientes datos para entrenar el modelo. Se encontraron solo {len(df)} filas válidas.")
 
-    return pd.DataFrame(datos)
+print(f"\n=== Información del Dataset ===")
+print(f"Total de registros: {len(df)}")
+print(f"Columnas: {list(df.columns)}")
 
+# Seleccionar las columnas relevantes para el modelo (regresión multivariable)
+# Variables independientes: Arena, Grava, Cemento
+# Variable dependiente: Agua
+features = ['Arena (kg)', 'Grava (kg)', 'Cemento (kg)']
+target = 'Agua (kg)'
 
-def prepare_daily_series(df: pd.DataFrame) -> pd.DataFrame:
-    """Agrupa por fecha para obtener consumo diario y genera features temporales."""
-    df = df.copy()
-    df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
-    df = df.dropna(subset=['fecha', 'volumen_m3'])
-    df['volumen_m3'] = pd.to_numeric(df['volumen_m3'], errors='coerce')
-    df = df.dropna(subset=['volumen_m3'])
+# Verificar que las columnas existen
+columnas_necesarias = features + [target]
+columnas_faltantes = [col for col in columnas_necesarias if col not in df.columns]
+if columnas_faltantes:
+    raise ValueError(f"Columnas faltantes en el dataset: {columnas_faltantes}")
 
-    # Consumo diario total
-    daily = df.groupby('fecha', as_index=False)['volumen_m3'].sum()
+X = df[features].values
+y = df[target].values
 
-    # Features temporales
-    daily['anio'] = daily['fecha'].dt.year
-    daily['mes'] = daily['fecha'].dt.month
-    daily['semana'] = daily['fecha'].dt.isocalendar().week.astype(int)
-    daily['dia'] = daily['fecha'].dt.day
-    daily['dia_semana'] = daily['fecha'].dt.dayofweek
+print(f"\n=== Configuración del Modelo ===")
+print(f"Variables independientes: {', '.join(features)}")
+print(f"Variable dependiente: {target}")
+print(f"Forma de X: {X.shape}")
+print(f"Forma de y: {y.shape}")
 
-    # Lags simples para capturar tendencia reciente
-    daily = daily.sort_values('fecha').reset_index(drop=True)
-    for lag in [1, 7, 14, 28]:
-        daily[f'lag_{lag}'] = daily['volumen_m3'].shift(lag)
+# Escalar los datos
+scaler_X = StandardScaler()
+scaler_y = StandardScaler()
+X_scaled = scaler_X.fit_transform(X)
+y_scaled = scaler_y.fit_transform(y.reshape(-1, 1)).ravel()
 
-    # Imputar lags con mediana inicial
-    med = daily['volumen_m3'].median()
-    for col in [c for c in daily.columns if c.startswith('lag_')]:
-        daily[col] = daily[col].fillna(med)
+# Dividir los datos en entrenamiento y validación
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y_scaled, test_size=0.2, random_state=42, shuffle=True
+)
 
-    # Garantizar ausencia de nulos en features numéricos
-    feature_cols = [c for c in daily.columns if c != 'fecha']
-    daily[feature_cols] = daily[feature_cols].fillna(med)
+print(f"Datos de entrenamiento: {len(X_train)}")
+print(f"Datos de validación: {len(X_test)}")
 
-    return daily
+# Crear y entrenar múltiples modelos
+print(f"\n=== Entrenando Modelos ===")
 
+modelos = {
+    'Random Forest': RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1),
+    'Gradient Boosting': GradientBoostingRegressor(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42),
+    'XGBoost': XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42, n_jobs=-1)
+}
 
-def split_train_test(daily: pd.DataFrame):
-    """Divide en train/test preservando el orden temporal."""
-    feature_cols = [c for c in daily.columns if c not in ['fecha', 'volumen_m3']]
-    X = daily[feature_cols]
-    y = daily['volumen_m3']
+resultados = {}
 
-    # División temporal: 80% primeros registros para train
-    split_idx = int(len(daily) * 0.8)
-    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-    y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
-    return X_train, X_test, y_train, y_test, feature_cols
-
-
-def train_model(X_train, y_train):
-    """Entrena un GradientBoostingRegressor."""
-    model = GradientBoostingRegressor(random_state=42)
-    model.fit(X_train, y_train)
-    return model
-
-
-def evaluate(model, X_test, y_test):
-    preds = model.predict(X_test)
-    mse = mean_squared_error(y_test, preds)
-    return {
-        "r2": r2_score(y_test, preds),
-        "mae": mean_absolute_error(y_test, preds),
-        "rmse": sqrt(mse),
+for nombre, modelo in modelos.items():
+    print(f"\nEntrenando {nombre}...")
+    modelo.fit(X_train, y_train)
+    
+    # Predicciones
+    y_pred_train = modelo.predict(X_train)
+    y_pred_test = modelo.predict(X_test)
+    
+    # Desescalar predicciones
+    y_pred_train_original = scaler_y.inverse_transform(y_pred_train.reshape(-1, 1)).ravel()
+    y_pred_test_original = scaler_y.inverse_transform(y_pred_test.reshape(-1, 1)).ravel()
+    y_train_original = scaler_y.inverse_transform(y_train.reshape(-1, 1)).ravel()
+    y_test_original = scaler_y.inverse_transform(y_test.reshape(-1, 1)).ravel()
+    
+    # Calcular métricas
+    mse_train = mean_squared_error(y_train_original, y_pred_train_original)
+    mse_test = mean_squared_error(y_test_original, y_pred_test_original)
+    r2_train = r2_score(y_train_original, y_pred_train_original)
+    r2_test = r2_score(y_test_original, y_pred_test_original)
+    mae_test = mean_absolute_error(y_test_original, y_pred_test_original)
+    rmse_test = np.sqrt(mse_test)
+    
+    resultados[nombre] = {
+        'modelo': modelo,
+        'mse_train': mse_train,
+        'mse_test': mse_test,
+        'r2_train': r2_train,
+        'r2_test': r2_test,
+        'mae_test': mae_test,
+        'rmse_test': rmse_test,
+        'y_pred': y_pred_test_original
     }
+    
+    print(f"  R² Entrenamiento: {r2_train:.4f}")
+    print(f"  R² Validación: {r2_test:.4f}")
+    print(f"  RMSE: {rmse_test:.4f}")
+    print(f"  MAE: {mae_test:.4f}")
 
+# Seleccionar el mejor modelo basado en R² de validación
+mejor_nombre = max(resultados, key=lambda k: resultados[k]['r2_test'])
+mejor_modelo = resultados[mejor_nombre]['modelo']
+mejores_metricas = resultados[mejor_nombre]
 
-def forecast_future(model, feature_cols, last_date: pd.Timestamp, lag_fill: float, days_ahead: int = 365):
-    """Genera un DataFrame con predicciones para fechas futuras."""
-    future_dates = pd.date_range(start=last_date + timedelta(days=1), periods=days_ahead, freq='D')
-    fut = pd.DataFrame({"fecha": future_dates})
-    fut['anio'] = fut['fecha'].dt.year
-    fut['mes'] = fut['fecha'].dt.month
-    fut['semana'] = fut['fecha'].dt.isocalendar().week.astype(int)
-    fut['dia'] = fut['fecha'].dt.day
-    fut['dia_semana'] = fut['fecha'].dt.dayofweek
+print(f"\n=== Mejor Modelo: {mejor_nombre} ===")
+print(f"R² Validación: {mejores_metricas['r2_test']:.4f}")
+print(f"RMSE: {mejores_metricas['rmse_test']:.4f}")
+print(f"MAE: {mejores_metricas['mae_test']:.4f}")
 
-    # Para lags futuras usamos el valor mediano histórico como aproximación conservadora
-    fut['lag_1'] = fut['lag_7'] = fut['lag_14'] = fut['lag_28'] = lag_fill
+# Calcular MAPE
+y_test_original = scaler_y.inverse_transform(y_test.reshape(-1, 1)).ravel()
+predictions_original = mejores_metricas['y_pred']
+mape = np.mean(np.abs((y_test_original - predictions_original) / (y_test_original + 1e-8))) * 100
+print(f"MAPE: {mape:.2f}%")
 
-    # Alinear columnas para el modelo sin perder 'fecha'
-    fut_features = fut.reindex(columns=feature_cols, fill_value=lag_fill)
-    fut['pred_volumen_m3'] = model.predict(fut_features)
-    return fut
+# Guardar el mejor modelo en un archivo .pkl
+MODEL_PATH = BASE_DIR / 'modelo_regresion_agua.pkl'
+with open(MODEL_PATH, 'wb') as file:
+    pickle.dump({
+        'model': mejor_modelo,
+        'model_name': mejor_nombre,
+        'scaler_X': scaler_X,
+        'scaler_y': scaler_y,
+        'features': features,
+        'target': target,
+        'metricas': {
+            'mse': mejores_metricas['mse_test'],
+            'rmse': mejores_metricas['rmse_test'],
+            'r2': mejores_metricas['r2_test'],
+            'mae': mejores_metricas['mae_test'],
+            'mape': mape
+        }
+    }, file)
+print(f'\n✓ Modelo guardado exitosamente en: {MODEL_PATH}')
 
+# Función para predicciones
+def predecir_agua(arena, grava, cemento):
+    """
+    Predice la cantidad de agua necesaria dados los materiales.
+    
+    Args:
+        arena (float): Cantidad de arena en kg
+        grava (float): Cantidad de grava en kg
+        cemento (float): Cantidad de cemento en kg
+    
+    Returns:
+        float: Predicción de agua en kg
+    """
+    try:
+        # Crear array con los valores de entrada
+        entrada = np.array([[arena, grava, cemento]])
+        
+        # Escalar los datos
+        entrada_escalada = scaler_X.transform(entrada)
+        
+        # Realizar predicción
+        prediccion_escalada = mejor_modelo.predict(entrada_escalada)
+        prediccion = scaler_y.inverse_transform(prediccion_escalada.reshape(-1, 1))[0][0]
+        
+        # Asegurar que el valor no sea negativo
+        prediccion = max(prediccion, 0)
+        
+        return prediccion
+    except Exception as e:
+        print(f"Error en la predicción: {e}")
+        return None
 
-def main():
-    print("=== Entrenando modelo de consumo futuro ===")
-    df = load_despachos()
-    if df.empty:
-        print("No hay datos en la tabla despachos")
-        return
+# Ejemplos de predicción
+print(f'\n=== Ejemplos de Predicciones ===')
+ejemplos = [
+    (150, 300, 50),
+    (200, 400, 75),
+    (100, 250, 40)
+]
 
-    daily = prepare_daily_series(df)
-    if len(daily) < 30:
-        print("Muy pocos datos para entrenar (menos de 30 días)")
-        return
-    X_train, X_test, y_train, y_test, feature_cols = split_train_test(daily)
+for arena, grava, cemento in ejemplos:
+    agua_predicha = predecir_agua(arena, grava, cemento)
+    if agua_predicha is not None:
+        print(f'Arena: {arena} kg, Grava: {grava} kg, Cemento: {cemento} kg → Agua predicha: {agua_predicha:.2f} kg')
 
-    model = train_model(X_train, y_train)
-    metrics = evaluate(model, X_test, y_test)
+# Gráfico 1: Valores reales vs predicciones
+plt.figure(figsize=(15, 10))
 
-    # Guardar modelo
-    joblib.dump({"model": model, "features": feature_cols}, MODEL_PATH)
-    print(f"Modelo guardado en {MODEL_PATH}")
+# Comparación de modelos
+plt.subplot(2, 3, 1)
+for nombre, resultado in resultados.items():
+    y_pred = resultado['y_pred']
+    r2 = resultado['r2_test']
+    plt.scatter(y_test_original, y_pred, alpha=0.5, label=f'{nombre} (R²={r2:.3f})', s=30)
+plt.plot([y_test_original.min(), y_test_original.max()], 
+         [y_test_original.min(), y_test_original.max()], 
+         'r--', lw=2, label='Predicción perfecta')
+plt.xlabel('Valores Reales (kg)', fontweight='bold')
+plt.ylabel('Predicciones (kg)', fontweight='bold')
+plt.title('Comparación de Modelos', fontweight='bold')
+plt.legend(fontsize=8)
+plt.grid(True, alpha=0.3)
 
-    # Forecast 1 año
-    last_date = daily['fecha'].max()
-    lag_fill = float(daily['volumen_m3'].median())
-    fut = forecast_future(model, feature_cols, last_date, lag_fill=lag_fill, days_ahead=365)
+# Mejor modelo
+plt.subplot(2, 3, 2)
+plt.scatter(y_test_original, predictions_original, alpha=0.6, edgecolors='k', c='blue')
+plt.plot([y_test_original.min(), y_test_original.max()], 
+         [y_test_original.min(), y_test_original.max()], 
+         'r--', lw=2, label='Predicción perfecta')
+plt.xlabel('Valores Reales (kg)', fontweight='bold')
+plt.ylabel('Predicciones (kg)', fontweight='bold')
+plt.title(f'Mejor Modelo: {mejor_nombre}\nR²={mejores_metricas["r2_test"]:.4f}', fontweight='bold')
+plt.legend()
+plt.grid(True, alpha=0.3)
 
-    print("--- Métricas ---")
-    print(f"R2:   {metrics['r2']:.4f}")
-    print(f"MAE:  {metrics['mae']:.2f} m3")
-    print(f"RMSE: {metrics['rmse']:.2f} m3")
-    print(f"Última fecha histórica: {last_date.date()}")
-    print(f"Primera fecha futura:   {fut['fecha'].min().date()}")
-    print(f"Última fecha futura:    {fut['fecha'].max().date()}")
+# Residuos
+plt.subplot(2, 3, 3)
+residuos = y_test_original - predictions_original
+plt.scatter(predictions_original, residuos, alpha=0.6, edgecolors='k', c='green')
+plt.axhline(y=0, color='r', linestyle='--', lw=2)
+plt.xlabel('Predicciones (kg)', fontweight='bold')
+plt.ylabel('Residuos (kg)', fontweight='bold')
+plt.title('Gráfico de Residuos', fontweight='bold')
+plt.grid(True, alpha=0.3)
 
-    # Mostrar primeras filas de pronóstico
-    print("\nPronóstico inicial:")
-    print(fut[['fecha', 'pred_volumen_m3']].head())
+# Distribución de residuos
+plt.subplot(2, 3, 4)
+plt.hist(residuos, bins=20, alpha=0.7, color='purple', edgecolor='black')
+plt.xlabel('Residuos (kg)', fontweight='bold')
+plt.ylabel('Frecuencia', fontweight='bold')
+plt.title('Distribución de Residuos', fontweight='bold')
+plt.grid(True, alpha=0.3, axis='y')
 
+# Importancia de características (solo para modelos de árbol)
+if mejor_nombre in ['Random Forest', 'Gradient Boosting', 'XGBoost']:
+    plt.subplot(2, 3, 5)
+    importancias = mejor_modelo.feature_importances_
+    indices = np.argsort(importancias)[::-1]
+    plt.barh([features[i] for i in indices], importancias[indices], 
+             color=['#1f77b4', '#ff7f0e', '#2ca02c'])
+    plt.xlabel('Importancia', fontweight='bold')
+    plt.title('Importancia de Variables', fontweight='bold')
+    plt.grid(True, alpha=0.3, axis='x')
 
-if __name__ == "__main__":
-    main()
+# Métricas comparativas
+plt.subplot(2, 3, 6)
+nombres_modelos = list(resultados.keys())
+r2_scores = [resultados[n]['r2_test'] for n in nombres_modelos]
+colors_bar = ['green' if n == mejor_nombre else 'skyblue' for n in nombres_modelos]
+plt.barh(nombres_modelos, r2_scores, color=colors_bar, edgecolor='black')
+plt.xlabel('R² Score', fontweight='bold')
+plt.title('Comparación de R² por Modelo', fontweight='bold')
+plt.grid(True, alpha=0.3, axis='x')
+plt.xlim(0, 1)
+
+plt.tight_layout()
+plt.savefig(BASE_DIR / 'prediccion_agua.png', dpi=300, bbox_inches='tight')
+print(f"\n✓ Gráfico guardado en: {BASE_DIR / 'prediccion_agua.png'}")
+
+# Gráfico 2: Correlaciones
+plt.figure(figsize=(8, 6))
+correlaciones = []
+for i, feature in enumerate(features):
+    corr = np.corrcoef(X[:, i], y)[0, 1]
+    correlaciones.append(corr)
+
+plt.barh(features, correlaciones, color=['#1f77b4', '#ff7f0e', '#2ca02c'])
+plt.xlabel('Correlación con Agua', fontweight='bold')
+plt.title('Correlación de Variables con la Cantidad de Agua', fontweight='bold')
+plt.grid(True, alpha=0.3, axis='x')
+plt.tight_layout()
+plt.savefig(BASE_DIR / 'correlaciones.png', dpi=300, bbox_inches='tight')
+print(f"✓ Gráfico guardado en: {BASE_DIR / 'correlaciones.png'}")
+
+print(f"\n{'='*50}")
+print(f"✓ Entrenamiento completado exitosamente")
+print(f"✓ Modelo seleccionado: {mejor_nombre}")
+print(f"✓ R² Score: {mejores_metricas['r2_test']:.4f}")
+print(f"{'='*50}")
+
+plt.show()
