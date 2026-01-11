@@ -434,7 +434,18 @@ tbody tr:hover{ background: rgba(79,140,255,.06); }
 .alert.good{ border-left-color: var(--good); }
 .alert.warn{ border-left-color: var(--warn); }
 .alert.bad{ border-left-color: var(--bad); }
+
+/* FIX visibilidad dropdown */
+select option {
+  background: #0f1a2e;
+  color: #ffffff;
+}
+
+.modal-body .row {
+  margin-bottom: 16px;
+}
 </style>
+
 </head>
 <body>
   <div class="app">
@@ -536,7 +547,7 @@ tbody tr:hover{ background: rgba(79,140,255,.06); }
     <div style="color:var(--muted); font-size:13px;">
       Administra materiales, mínimos y stocks. El estado cambia automáticamente.
     </div>
-    <button class="btn" id="btnAddMaterial" type="button">Agregar material</button>
+    
   </div>
 
   <div class="table-wrap">
@@ -560,13 +571,27 @@ tbody tr:hover{ background: rgba(79,140,255,.06); }
   <div class="modal-card">
     <div class="modal-head">
       <h3 id="modalInvTitle">Agregar material</h3>
-      <button class="btn secondary small" id="modalInvClose" type="button" aria-label="Cerrar">×</button>
+      
     </div>
     <div class="modal-body">
       <div class="row">
         <div class="field">
           <label for="mMaterial">Material</label>
-          <input id="mMaterial" type="text" placeholder="Ej: Cemento" />
+          <select id="mMaterial">
+  <option value="">Seleccione un material</option>
+  <option value="RHEO 1000">RHEO 1000</option>
+  <option value="Sika 115">Sika 115</option>
+  <option value="BASF 719">BASF 719</option>
+  <option value="Sika 200">Sika 200</option>
+  <option value="Delvo">Delvo</option>
+  <option value="MasterGlenium 7950">MasterGlenium 7950</option>
+  <option value="MasterGlenium 7970">MasterGlenium 7970</option>
+  <option value="Sika PP 48 - BARCHIP">Sika PP 48 - BARCHIP</option>
+  <option value="Cemento">Cemento</option>
+  <option value="Agua">Agua</option>
+  <option value="Arena">Arena</option>
+  <option value="Grava">Grava</option>
+</select>
         </div>
         <div class="field">
           <label for="mUnidad">Unidad</label>
@@ -639,7 +664,7 @@ function toast(type, title, msg, ms=3500){
       <p class="t-title">${escapeHtml(title || "Aviso")}</p>
       <p class="t-msg">${escapeHtml(msg || "")}</p>
     </div>
-    <button class="x" type="button" aria-label="Cerrar notificación">×</button>
+    
   `;
   el.querySelector(".x").addEventListener("click", () => el.remove());
   wrap.appendChild(el);
@@ -738,8 +763,7 @@ function findInvItemByName(name){
         <td><span class="badge ${st.badge}">${escapeHtml(st.txt)}</span></td>
         <td style="white-space:nowrap;">
           <button class="btn secondary small" data-edit="${idx}" type="button">Editar</button>
-          <button class="btn danger small" data-del="${idx}" type="button">Eliminar</button>
-        </td>
+</td>
       `;
       body.appendChild(tr);
     });
@@ -747,14 +771,6 @@ function findInvItemByName(name){
     body.querySelectorAll("[data-edit]").forEach(b=>{
       b.addEventListener("click", () => openModal(Number(b.getAttribute("data-edit"))));
     });
-    body.querySelectorAll("[data-del]").forEach(b=>{
-      b.addEventListener("click", () => {
-        const i = Number(b.getAttribute("data-del"));
-        inventario.splice(i,1);
-        saveInventario();
-        render();
-        toast("good","Eliminado","Material eliminado del inventario.");
-      });
     });
   }
 
@@ -784,11 +800,15 @@ function findInvItemByName(name){
     const unidad = document.getElementById("mUnidad").value;
     const stock = safeNum(document.getElementById("mStock").value);
     const minimo = safeNum(document.getElementById("mMin").value);
-    if (!material){ toast("bad","Falta material","Ingresa el nombre del material."); return; }
+    if (!material){ toast("bad","Falta material","Selecciona un material de la lista."); return; }
     if (!Number.isFinite(stock) || stock < 0){ toast("bad","Stock inválido","Ingresa un stock válido (≥ 0)."); return; }
     if (!Number.isFinite(minimo) || minimo < 0){ toast("bad","Mínimo inválido","Ingresa un mínimo válido (≥ 0)."); return; }
 
     const obj = {material, unidad, stock, minimo};
+    if (editIndex===null){
+      const exists = inventario.some(it => normName(it.material) === normName(material));
+      if (exists){ toast("warn","Material duplicado","Ese material ya existe en el inventario. Usa Editar."); return; }
+    }
     if (editIndex!==null){
       inventario[editIndex] = obj;
     } else {
