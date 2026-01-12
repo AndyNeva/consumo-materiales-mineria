@@ -7,7 +7,7 @@ from plotly.utils import PlotlyJSONEncoder
 
 # Cargar el archivo CSV desde el mismo directorio del script
 BASE_DIR = Path(__file__).resolve().parent
-DATOS = BASE_DIR / "Datos_Stat_Model.csv"
+DATOS = BASE_DIR / "DatosLimpios.csv"
 
 if not DATOS.exists():
     raise FileNotFoundError(f"No se encontro el archivo de datos esperado en {DATOS}")
@@ -208,6 +208,165 @@ def exportar_todo_a_json(filename: str = "graficas.json") -> Path:
     return _save_single_json(bundle, filename)
 
 
+# ==========================================
+# APARTADO: GENERACIÓN DE IMÁGENES PNG
+# ==========================================
+
+def _crear_figura_desde_dict(fig_dict):
+    """Reconstruye una figura de Plotly desde un diccionario."""
+    if fig_dict is None:
+        return None
+    return go.Figure(data=fig_dict.get('data', []), layout=fig_dict.get('layout', {}))
+
+
+def generar_imagenes_png():
+    """Genera todas las gráficas como imágenes PNG en la carpeta graficas.
+    Retorna un diccionario con las rutas de los archivos generados.
+    """
+    output_dir = _output_dir()
+    rutas_generadas = {}
+    
+    print("Generando imagenes PNG de las graficas...")
+    print(f"Carpeta de destino: {output_dir}")
+    print("-" * 60)
+    
+    # 1. Boxplot de materiales
+    try:
+        fig_dict = graficar_boxplot_materiales(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "boxplot_materiales.png"
+            fig.write_image(str(ruta), width=1200, height=600)
+            rutas_generadas['boxplot_materiales'] = str(ruta)
+            print("[OK] boxplot_materiales.png")
+    except Exception as e:
+        print(f"[ERROR] boxplot_materiales: {e}")
+    
+    # 2. Frecuencia de diseños
+    try:
+        fig_dict = graficar_frecuencia_disenos(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "frecuencia_disenos.png"
+            fig.write_image(str(ruta), width=1200, height=600)
+            rutas_generadas['frecuencia_disenos'] = str(ruta)
+            print("[OK] frecuencia_disenos.png")
+    except Exception as e:
+        print(f"[ERROR] frecuencia_disenos: {e}")
+    
+    # 3. Matriz de correlación de materiales
+    try:
+        fig_dict = graficar_matriz_correlacion(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "matriz_correlacion_materiales.png"
+            fig.write_image(str(ruta), width=1000, height=800)
+            rutas_generadas['matriz_correlacion_materiales'] = str(ruta)
+            print("[OK] matriz_correlacion_materiales.png")
+    except Exception as e:
+        print(f"[ERROR] matriz_correlacion: {e}")
+    
+    # 4. Boxplot de aditivos
+    try:
+        fig_dict = graficar_aditivos_boxplot(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "boxplot_aditivos.png"
+            fig.write_image(str(ruta), width=1200, height=600)
+            rutas_generadas['boxplot_aditivos'] = str(ruta)
+            print("[OK] boxplot_aditivos.png")
+    except Exception as e:
+        print(f"[ERROR] boxplot_aditivos: {e}")
+    
+    # 5. Histograma de aditivos
+    try:
+        fig_dict = graficar_aditivos_histograma(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "histograma_aditivos.png"
+            fig.write_image(str(ruta), width=1200, height=600)
+            rutas_generadas['histograma_aditivos'] = str(ruta)
+            print("[OK] histograma_aditivos.png")
+    except Exception as e:
+        print(f"[ERROR] histograma_aditivos: {e}")
+    
+    # 6. Heatmap de correlación de aditivos
+    try:
+        fig_dict = graficar_aditivos_heatmap(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "correlacion_aditivos.png"
+            fig.write_image(str(ruta), width=1000, height=800)
+            rutas_generadas['correlacion_aditivos'] = str(ruta)
+            print("[OK] correlacion_aditivos.png")
+    except Exception as e:
+        print(f"[ERROR] correlacion_aditivos: {e}")
+    
+    # 7. Tabla de resumen numérico
+    try:
+        columnas_todas = [c for c in MATERIALES_COLS + ADITIVOS_COLS if c in df.columns]
+        if columnas_todas:
+            resumen = df[columnas_todas].describe()
+            fig = go.Figure(data=[go.Table(
+                header=dict(
+                    values=['Estadistico'] + list(resumen.columns),
+                    fill_color='paleturquoise',
+                    align='left',
+                    font=dict(size=12, color='black')
+                ),
+                cells=dict(
+                    values=[resumen.index] + [resumen[col].round(2) for col in resumen.columns],
+                    fill_color='lavender',
+                    align='left',
+                    font=dict(size=11)
+                )
+            )])
+            fig.update_layout(title="Resumen Numerico - Materiales y Aditivos", height=500)
+            ruta = output_dir / "resumen_numerico.png"
+            fig.write_image(str(ruta), width=1400, height=600)
+            rutas_generadas['resumen_numerico'] = str(ruta)
+            print("[OK] resumen_numerico.png")
+    except Exception as e:
+        print(f"[ERROR] resumen_numerico: {e}")
+    
+    # 8. Tabla de estadísticos de aditivos
+    try:
+        presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+        if presentes:
+            desc = df[presentes].describe()
+            fig = go.Figure(data=[go.Table(
+                header=dict(
+                    values=['Estadistico'] + list(desc.columns),
+                    fill_color='lightcoral',
+                    align='left',
+                    font=dict(size=12, color='black')
+                ),
+                cells=dict(
+                    values=[desc.index] + [desc[col].round(2) for col in desc.columns],
+                    fill_color='mistyrose',
+                    align='left',
+                    font=dict(size=11)
+                )
+            )])
+            fig.update_layout(title="Estadisticos Descriptivos - Aditivos", height=500)
+            ruta = output_dir / "estadisticos_aditivos.png"
+            fig.write_image(str(ruta), width=1400, height=600)
+            rutas_generadas['estadisticos_aditivos'] = str(ruta)
+            print("[OK] estadisticos_aditivos.png")
+    except Exception as e:
+        print(f"[ERROR] estadisticos_aditivos: {e}")
+    
+    print("-" * 60)
+    print(f"Proceso completado. Total: {len(rutas_generadas)} imagenes generadas.")
+    print(f"Ubicacion: {output_dir}")
+    
+    return rutas_generadas
+
+
 if __name__ == "__main__":
     # Si se llama directamente (poco común en esta app), exporta todo.
     exportar_todo_a_json()
+    
+    # Generar imágenes PNG para verificación visual
+    print("\n" + "=" * 60)
+    generar_imagenes_png()
