@@ -26,6 +26,21 @@ def login():
 def dashboard():
     return render_template("dashboard.html")
 
+#Ruta del inventario
+@app.route("/inventario")
+def dashboard():
+    return render_template("inventario.html")
+
+#Ruta del registro
+@app.route("/registro")
+def dashboard():
+    return render_template("registro.html")
+
+#Ruta del historial
+@app.route("/historial")
+def dashboard():
+    return render_template("historial.html")
+
 
 # DEFINICIÓN DE APIs
 

@@ -2,7 +2,7 @@ from flask import current_app
 import sqlite3
 from pathlib import Path
 from datetime import date
-from utils.helpers import ultimos_7_dias
+from utils.helpers import ultimos_7_dias, mapeo_materiales
 
 def obtener_conexion_flask():
     """
@@ -32,7 +32,7 @@ def cargar_datos_tabla(tabla: str):
         list[dict]: Lista con todos los registros de la tabla.
     """
 
-    tablas_permitidas = {'despachos', 'movimientos', 'recetas'}
+    tablas_permitidas = {'despachos', 'movimientos', 'recetas', 'materiales'}
     # Valida que la tabla solicitada esté en la lista permitida
     if tabla not in tablas_permitidas:
         raise ValueError(f"Tabla '{tabla}' no permitida. Use: {tablas_permitidas}")
@@ -100,12 +100,12 @@ def alertas_inventario():
     alertas =[]
 
     for material in materiales:
-        if material['saldo'] <= material['minimo']:
+        if material['stock_actual'] <= material['stock_minimo']:
             alertas_cant +=1
-            bajo = {'material': material['nombre'], 'stock':material['saldo'], 'minimo':material['minimo'],'estado':'bajo'}
+            bajo = {'material': material['nombre'], 'stock':material['stock_actual'], 'minimo':material['stock_minimo'],'estado':'bajo'}
             alertas.append(bajo)
         else:
-            ok = {'material': material['nombre'], 'stock':material['saldo'], 'minimo':material['minimo'],'estado':'ok'}
+            ok = {'material': material['nombre'], 'stock':material['stock_actual'], 'minimo':material['stock_minimo'],'estado':'ok'}
             alertas.append(ok)
     
     return alertas, alertas_cant
@@ -116,7 +116,7 @@ def receta_actual(diseno):
         conn = obtener_conexion_autonoma()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT * FROM recetas WHERE diseno_mezcla = ?", (diseno,))
+        cursor.execute("SELECT * FROM recetas WHERE codigo_diseno = ?", (diseno,))
         receta = cursor.fetchone()
 
          # Validar que existe la receta
@@ -124,7 +124,7 @@ def receta_actual(diseno):
             print(f"Error: No se encontró la receta para {diseno}")
             conn.close()
             return None
-        return receta
+        return dict(receta)
 
     except sqlite3.Error as e:
         print(f"Error al seleccionar receta: {e}")
@@ -219,7 +219,7 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, turno, humeda
         # Preparar la consulta SQL
         query = f"""
         INSERT INTO despachos (
-            fecha, fuente_cemento, volumen_m3, diseno_mezcla, lote, wbs, zona,
+            fecha, fuente_cemento, volumen_m3, diseno_mezcla, lote, wbs, zona, turno,
             arena_humedad_pct, asentamiento_final_cm, temperatura_c,{", ".join(campos_receta)}
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {', '.join(['?'] * len(campos_receta))})
         """
@@ -233,6 +233,7 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, turno, humeda
             nuevo_lote,
             wbs,
             destino,
+            turno,
             humedad_arena,
             asentamiento_final,
             temperatura,
@@ -255,7 +256,7 @@ def insertar_despacho(fecha, volumen, diseno_mezcla, wbs, destino, turno, humeda
         return None
 
 
-def cambiar_stock(diseno, volumen):
+def consumos_calculados(diseno, volumen):
     if not diseno or not isinstance(diseno, str):
         print("Error: Diseño de mezcla inválido o vacío")
         return None
@@ -273,14 +274,86 @@ def cambiar_stock(diseno, volumen):
 
         receta = receta_actual(diseno)
         materiales = cargar_datos_tabla('materiales')
+        mapeo = mapeo_materiales
 
+        consumos = []
+
+        for cod_material, dosificacion in receta.items():
+            nombre_material = mapeo.get(cod_material)
+            if isinstance(nombre_material, list):
+                
+                for material in nombre_material:
+                    fila_material = next((fila for fila in materiales if fila["nombre"] == material), None)
+                    
+                    consumo = {"material": material, "dosificacion": dosificacion, "consumo_total": dosificacion*volumen, 
+                        "unidad": fila_material["unidad"], "stock_actual": fila_material.get("stock_actual", 0),
+                        "saldo":fila_material.get("stock_actual", 0)-(dosificacion*volumen)}
+                    consumos.append(consumo)
+            else:
+                fila_material = next((fila for fila in materiales if fila["nombre"] == material), None)
+                consumo = {"material": nombre_material, "dosificacion": dosificacion, "consumo_total": dosificacion*volumen, 
+                        "unidad": fila_material["unidad"], "stock_actual": fila_material.get("stock_actual", 0),
+                        "saldo":fila_material.get("stock_actual", 0)-(dosificacion*volumen)}
+                consumos.append(consumo)
+        
+        return consumo
 
     except sqlite3.Error as e:
-        print(f"Error al cambiar el stock: {e}")
+        print(f"Error al mostrar consumos calculados: {e}")
         return None
-        
 
-def insertar_material(material, stock, unidad, minimo, usuario_id):
+def cambiar_stock(diseno, volumen, usuario_id):
+    consumos = consumos_calculados(diseno, volumen)
+    if not consumos:
+        print("Error: No se pudieron calcular los consumos")
+        return False
+    
+    try:
+        conn = obtener_conexion_autonoma()
+        cursor = conn.cursor()
+        
+        for consumo in consumos:
+            material_nombre = consumo['material']
+            nuevo_saldo = consumo['saldo']
+            
+            # Si el saldo es None (material no existe en tabla), saltar
+            if nuevo_saldo is None:
+                continue
+            
+            # Actualizar el stock_actual en la tabla materiales
+            cursor.execute("""
+                UPDATE materiales 
+                SET stock_actual = ? 
+                WHERE nombre = ?
+            """, (nuevo_saldo, material_nombre))
+
+            cursor.execute("""
+                    INSERT INTO movimientos 
+                    (usuario_id, material_id, cantidad, fecha, tipo, proveedor, detalle)
+                    SELECT ?, id, ?, ?, 'EGRESO', 'Producción', ?
+                    FROM materiales 
+                    WHERE nombre = ?
+                """, (
+                    usuario_id,
+                    consumo['consumo_total'], 
+                    date.today().isoformat(),
+                    f"Despacho {diseno} - {volumen}m³",
+                    material_nombre
+                ))
+
+        conn.commit()
+        conn.close()
+
+        print(f"✅ Stock actualizado para {len(consumos)} materiales")
+        return True
+    except sqlite3.Error as e:
+        print(f"Error al actualizar stock: {e}")
+        if conn:
+            conn.rollback()
+            conn.close()
+        return False
+
+def agregar_stock(material, stock, unidad, usuario_id):
     # Validar parámetros requeridos
     if not material or not isinstance(material, str):
         print("Error: Nombre de material inválido o vacío")
@@ -293,7 +366,6 @@ def insertar_material(material, stock, unidad, minimo, usuario_id):
     # Validar valores numéricos
     try:
         stock = float(stock)
-        minimo = float(minimo)
     except (ValueError, TypeError):
         print("Error: Stock o mínimo deben ser valores numéricos")
         return None
@@ -303,43 +375,29 @@ def insertar_material(material, stock, unidad, minimo, usuario_id):
         print(f"Error: El stock no puede ser negativo. Recibido: {stock}")
         return None
     
-    if minimo < 0:
-        print(f"Error: El mínimo no puede ser negativo. Recibido: {minimo}")
-        return None
-    
     try:
         conn = obtener_conexion_autonoma()
         cursor = conn.cursor()
-        
-        # Verificar si el material ya existe
-        cursor.execute("SELECT id FROM materiales WHERE nombre = ?", (material,))
-        if cursor.fetchone():
-            print(f"Error: El material '{material}' ya existe en la base de datos")
-            conn.close()
-            return None
 
-        query_materiales = """
-            INSERT INTO materiales (
-                nombre, unidad, minimo
-            ) VALUES (?, ?, ?)
-            """
-        
-        cursor.execute(query_materiales, (material, unidad, minimo))
+       # SUMAR el stock nuevo al actual
+        cursor.execute("""
+            UPDATE materiales 
+            SET stock_actual = stock_actual + ?
+            WHERE nombre = ?
+        """, (stock, material))
 
         material_id = cursor.lastrowid
         # Consultar como ingresar
         fecha = date.today()
-        tipo = "INGRESO"
-        # Definir si va o no
         proveedor = "Desconocido"
 
         query_movimientos = """
             INSERT INTO movimientos (
                 usuario_id, material_id, cantidad, fecha, tipo, proveedor
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, 'INGRESO', ?)
             """
         
-        cursor.execute(query_movimientos, (usuario_id, material_id, stock, fecha, tipo, proveedor))
+        cursor.execute(query_movimientos, (usuario_id, material_id, stock, fecha, proveedor))
 
         # Confirmar los cambios
         conn.commit()
