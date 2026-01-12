@@ -570,6 +570,7 @@ tbody tr:hover{ background: rgba(79,140,255,.06); }
       <thead>
         <tr>
           <th>Fecha</th>
+          <th>Turno</th>
           <th>Volumen (m³)</th>
           <th>Diseño</th><th>Destino</th><th>WBS</th><th>Humedad arena (%)</th><th>Asentamiento (cm)</th><th>Temp mezcla (°C)</th><th>Material(es)</th><th>Cantidades</th>
         </tr>
@@ -577,6 +578,20 @@ tbody tr:hover{ background: rgba(79,140,255,.06); }
       <tbody id="histBody"></tbody>
     </table>
   </div>
+
+
+  <div id="searchTimesWrap" class="alert" style="margin-top:12px; display:none;">
+    <b>Tiempos de búsqueda (ms)</b>
+    <div style="margin-top:6px; display:flex; gap:10px; flex-wrap:wrap;">
+      <span class="badge"><span class="dot"></span> BST: <span id="bstTime">—</span></span>
+      <span class="badge"><span class="dot"></span> AVL: <span id="avlTime">—</span></span>
+      <span class="badge"><span class="dot"></span> N: <span id="nCount">—</span></span>
+    </div>
+    <div style="margin-top:8px; color:var(--muted); font-size:12px; line-height:1.35;">
+      Medido en el navegador con <span style="font-family:var(--mono);">performance.now()</span> sobre búsquedas repetidas de claves del resultado filtrado.
+    </div>
+  </div>
+
 </div>
       </div>
     </main>
@@ -752,6 +767,7 @@ function findInvItemByName(name){
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHtml(r.fecha || "")}</td>
+        <td>${escapeHtml(r.turno || "—")}</td>
         <td>${escapeHtml(fmt(vol))}</td>
         <td>${escapeHtml(r.diseno || "—")}</td>
         <td>${escapeHtml(r.destino || "—")}</td>
@@ -765,6 +781,115 @@ function findInvItemByName(name){
       body.appendChild(tr);
     });
   }
+
+
+  // --- Medición de tiempos de búsqueda BST vs AVL (solo lectura, no altera datos) ---
+  function keyOf(r, idx){
+    return String(r.fecha||"") + "|" + String(r.diseno||"") + "|" + String(r.destino||"") + "|" + String(idx);
+  }
+
+  function BSTNode(k){ this.k=k; this.l=null; this.r=null; }
+  function bstInsert(root, k){
+    if(!root) return new BSTNode(k);
+    let cur=root;
+    while(true){
+      if(k < cur.k){
+        if(cur.l) cur=cur.l; else { cur.l=new BSTNode(k); break; }
+      }else{
+        if(cur.r) cur=cur.r; else { cur.r=new BSTNode(k); break; }
+      }
+    }
+    return root;
+  }
+  function bstSearch(root, k){
+    let cur=root;
+    while(cur){
+      if(k === cur.k) return true;
+      cur = (k < cur.k) ? cur.l : cur.r;
+    }
+    return false;
+  }
+
+  function AVLNode(k){ this.k=k; this.h=1; this.l=null; this.r=null; }
+  function h(n){ return n ? n.h : 0; }
+  function upd(n){ n.h = 1 + Math.max(h(n.l), h(n.r)); }
+  function bal(n){ return n ? h(n.l) - h(n.r) : 0; }
+  function rotR(y){
+    const x=y.l, t2=x.r;
+    x.r=y; y.l=t2;
+    upd(y); upd(x);
+    return x;
+  }
+  function rotL(x){
+    const y=x.r, t2=y.l;
+    y.l=x; x.r=t2;
+    upd(x); upd(y);
+    return y;
+  }
+  function avlInsert(node, k){
+    if(!node) return new AVLNode(k);
+    if(k < node.k) node.l = avlInsert(node.l, k);
+    else node.r = avlInsert(node.r, k);
+
+    upd(node);
+    const b = bal(node);
+
+    if(b > 1 && k < node.l.k) return rotR(node); // LL
+    if(b < -1 && k > node.r.k) return rotL(node); // RR
+    if(b > 1 && k > node.l.k){ node.l = rotL(node.l); return rotR(node); } // LR
+    if(b < -1 && k < node.r.k){ node.r = rotR(node.r); return rotL(node); } // RL
+
+    return node;
+  }
+  function avlSearch(root, k){
+    let cur=root;
+    while(cur){
+      if(k === cur.k) return true;
+      cur = (k < cur.k) ? cur.l : cur.r;
+    }
+    return false;
+  }
+
+  function computeSearchTimes(list){
+    const n = Array.isArray(list) ? list.length : 0;
+    const wrap = document.getElementById("searchTimesWrap");
+    const elBST = document.getElementById("bstTime");
+    const elAVL = document.getElementById("avlTime");
+    const elN = document.getElementById("nCount");
+
+    if(!wrap || !elBST || !elAVL || !elN) return;
+
+    if(n === 0){
+      wrap.style.display = "none";
+      return;
+    }
+
+    const keys = list.map((r,i)=> keyOf(r,i));
+
+    let bstRoot = null;
+    let avlRoot = null;
+    for(const k of keys){ bstRoot = bstInsert(bstRoot, k); }
+    for(const k of keys){ avlRoot = avlInsert(avlRoot, k); }
+
+    const reps = Math.max(1, Math.floor(2000 / n)); // ~2000 búsquedas totales
+    let t0 = performance.now();
+    for(let rep=0; rep<reps; rep++){
+      for(const k of keys){ bstSearch(bstRoot, k); }
+    }
+    let t1 = performance.now();
+
+    let t2 = performance.now();
+    for(let rep=0; rep<reps; rep++){
+      for(const k of keys){ avlSearch(avlRoot, k); }
+    }
+    let t3 = performance.now();
+
+    elBST.textContent = (t1 - t0).toFixed(3);
+    elAVL.textContent = (t3 - t2).toFixed(3);
+    elN.textContent = String(n);
+    wrap.style.display = "block";
+  }
+  // --- fin medición ---
 
   function buscar(){
     const desde = document.getElementById("fDesde").value;
@@ -793,6 +918,7 @@ function findInvItemByName(name){
 
     res.sort((a,b) => (b.fecha || "").localeCompare(a.fecha || ""));
     render(res);
+    computeSearchTimes(res);
   }
 
   fillFilters();
