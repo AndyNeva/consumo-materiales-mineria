@@ -36,21 +36,6 @@ def login():
 def dashboard():
     return render_template("dashboard.html")
 
-#Ruta del inventario
-@app.route("/inventario")
-def dashboard():
-    return render_template("inventario.html")
-
-#Ruta del registro
-@app.route("/registro")
-def dashboard():
-    return render_template("registro.html")
-
-#Ruta del historial
-@app.route("/historial")
-def dashboard():
-    return render_template("historial.html")
-
 
 @app.route("/registro")
 def registro():
@@ -157,41 +142,6 @@ def api_dashboard():
 
     return Response(json.dumps(respuesta, ensure_ascii=False), mimetype="application/json")
 
-@app.route('/api/consumos', methods=['POST'])
-def api_consumos():
-    """API para calcular consumos sin registrar el despacho."""
-    try:
-        datos = request.get_json()
-        
-        if not datos:
-            return jsonify({"error": "No se recibieron datos JSON"}), 400
-        
-        diseno_mezcla = datos.get('diseno_mezcla')
-        volumen = datos.get('volumen')
-        
-        if not diseno_mezcla:
-            return jsonify({"error": "Falta el diseño de mezcla"}), 400
-        
-        if not volumen:
-            return jsonify({"error": "Falta el volumen"}), 400
-        
-        try:
-            volumen = float(volumen)
-            if volumen <= 0:
-                return jsonify({"error": "El volumen debe ser mayor a 0"}), 400
-        except (ValueError, TypeError):
-            return jsonify({"error": "El volumen debe ser un número válido"}), 400
-        
-        # Calcular consumos
-        resultado = consumos_calculados(diseno_mezcla, volumen)
-        
-        if resultado is None:
-            return jsonify({"error": "No se pudieron calcular los consumos. Verifique el diseño de mezcla."}), 400
-        
-        return Response(json.dumps(resultado, ensure_ascii=False), mimetype='application/json'), 200
-        
-    except Exception as e:
-        return jsonify({"error": f"Error inesperado: {str(e)}"}), 500
 
 @app.route("/api/recetas")
 def api_recetas():
@@ -210,86 +160,6 @@ def api_recetas():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
-@app.route('/api/materiales/estado')
-def api_estado_materiales():
-    """API para obtener el estado de todos los materiales en inventario."""
-    try:
-        materiales = obtener_estado_materiales()
-        
-        if materiales is None:
-            return jsonify({
-                "error": "No se pudieron obtener los materiales"
-            }), 500
-        
-        return Response(json.dumps(materiales, ensure_ascii=False), mimetype='application/json'), 200
-        
-    except Exception as e:
-        return jsonify({
-            "error": f"Error inesperado: {str(e)}"
-        }), 500
-
-@app.route('/api/materiales/agregar', methods=['POST'])
-def api_agregar_material():
-    """API para agregar stock a un material existente."""
-    try:
-        datos = request.get_json()
-        
-        if not datos:
-            return jsonify({
-                "error": "No se recibieron datos JSON"
-            }), 400
-        
-        # Extraer campos
-        material = datos.get('material')
-        stock = datos.get('stock')
-        unidad = datos.get('unidad')
-        usuario_id = datos.get('usuario_id', 1)
-        
-        # Validar campos requeridos
-        if not material:
-            return jsonify({
-                "error": "El campo 'material' es requerido"
-            }), 400
-        
-        if stock is None:
-            return jsonify({
-                "error": "El campo 'stock' es requerido"
-            }), 400
-        
-        if not unidad:
-            return jsonify({
-                "error": "El campo 'unidad' es requerido"
-            }), 400
-        
-        # Validar que stock sea numérico y positivo
-        try:
-            stock = float(stock)
-            if stock < 0:
-                return jsonify({
-                    "error": "El stock debe ser un valor positivo"
-                }), 400
-        except (ValueError, TypeError):
-            return jsonify({
-                "error": "El stock debe ser un valor numérico válido"
-            }), 400
-        
-        # Agregar el stock
-        material_id = agregar_stock(material, stock, unidad, usuario_id)
-        
-        if material_id is None:
-            return jsonify({
-                "error": "No se pudo agregar el stock. Verifique que el material exista."
-            }), 500
-        
-        respuesta = {"mensaje": f"Stock agregado exitosamente a {material}",
-            "material_id": material_id}
-        
-        return Response(json.dumps(respuesta, ensure_ascii=False), mimetype='application/json'), 201
-        
-    except Exception as e:
-        return jsonify({
-            "error": f"Error inesperado: {str(e)}"
-        }), 500
 
 @app.route("/api/despachos", methods=["GET", "POST"])
 def api_despachos():
