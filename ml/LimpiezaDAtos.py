@@ -18,8 +18,8 @@ class LimpiadorDatos:
         
     def cargar_datos(self):
         try:
-            ruta_completa = os.path.join(os.path.dirname(__file__), self.archivo_entrada)
-            self.df_original = pd.read_csv(ruta_completa)
+            ruta_completa = os.path.join(os.path.dirname(__file__), '..', 'data', 'raw', self.archivo_entrada)
+            self.df_original = pd.read_csv(ruta_completa, encoding='utf-8-sig')
             print(f"Datos cargados exitosamente")
             print(f"Total de filas: {len(self.df_original)}")
             print(f"Total de columnas: {len(self.df_original.columns)}")
@@ -27,6 +27,7 @@ class LimpiadorDatos:
             return True
         except FileNotFoundError:
             print(f"Error: No se encontró el archivo {self.archivo_entrada}")
+            print(f"El dataset debe estar en la carpeta: data/raw/")
             return False
         except Exception as e:
             print(f"Error al cargar datos: {str(e)}")
@@ -136,25 +137,30 @@ class LimpiadorDatos:
         print(f"\n Filas eliminadas: {filas_eliminadas_total}")
         print(f" Filas restantes: {len(self.df_limpio)}\n")
     
-    def eliminar_outliers(self, columnas_a_revisar=None, factor_iqr=1.5):
+    def winsorizar_outliers(self, columnas_a_revisar=None, factor_iqr=1.5, aplicar_winsorizar=False):
         """
-        Elimina outliers usando el método IQR (Rango Intercuartílico)
+        Detecta y opcionalmente winsoriza outliers usando el método IQR (Rango Intercuartílico)
         
         Args:
             columnas_a_revisar: Lista de columnas para detectar outliers (None = todas las numéricas)
             factor_iqr: Factor multiplicador del IQR (1.5 = outliers, 3.0 = outliers extremos)
+            aplicar_winsorizar: Si es True, winsoriza los outliers; si es False, solo los detecta y contabiliza
         """
 
-        print("3. ELIMINANDO OUTLIERS (DATOS EXTREMOS)")
+        print("3. ANÁLISIS DE OUTLIERS (DATOS EXTREMOS)")
   
         print(f"Método: IQR (Rango Intercuartílico) con factor {factor_iqr}")
+        if aplicar_winsorizar:
+            print("Modo: Winsorización (los valores extremos serán reemplazados por los límites)")
+        else:
+            print("Modo: Detección (solo se contabilizan los outliers, NO se modifican)")
         
         if columnas_a_revisar is None:
             # Seleccionar solo columnas numéricas
             columnas_a_revisar = self.df_limpio.select_dtypes(include=[np.number]).columns.tolist()
         
-        filas_con_outliers = pd.DataFrame()
-        tamaño_inicial = len(self.df_limpio)
+        valores_modificados = {}
+        total_valores_winsorizados = 0
         
         print(f"\n Analizando {len(columnas_a_revisar)} columnas numéricas...\n")
         
@@ -170,43 +176,49 @@ class LimpiadorDatos:
                 limite_superior = Q3 + factor_iqr * IQR
                 
                 # Identificar outliers
-                outliers = self.df_limpio[
-                    (self.df_limpio[columna] < limite_inferior) | 
-                    (self.df_limpio[columna] > limite_superior)
-                ]
+                mask_inferior = self.df_limpio[columna] < limite_inferior
+                mask_superior = self.df_limpio[columna] > limite_superior
                 
-                if len(outliers) > 0:
+                n_inferior = mask_inferior.sum()
+                n_superior = mask_superior.sum()
+                total_outliers = n_inferior + n_superior
+                
+                if total_outliers > 0:
                     print(f"  {columna}:")
                     print(f"      Rango normal: [{limite_inferior:.2f}, {limite_superior:.2f}]")
-                    print(f"      Outliers encontrados: {len(outliers)}")
-                    filas_con_outliers = pd.concat([filas_con_outliers, outliers])
+                    
+                    if aplicar_winsorizar:
+                        print(f"      Valores winsorizados: {total_outliers} ({n_inferior} inferiores, {n_superior} superiores)")
+                        # Winsorizar: reemplazar valores extremos por los límites
+                        self.df_limpio.loc[mask_inferior, columna] = limite_inferior
+                        self.df_limpio.loc[mask_superior, columna] = limite_superior
+                    else:
+                        print(f"      Outliers detectados: {total_outliers} ({n_inferior} inferiores, {n_superior} superiores)")
+                    
+                    valores_modificados[columna] = total_outliers
+                    total_valores_winsorizados += total_outliers
         
-        # Eliminar duplicados
-        if len(filas_con_outliers) > 0:
-            filas_con_outliers = filas_con_outliers.drop_duplicates()
-            print(f"\n Total de filas con outliers: {len(filas_con_outliers)}")
-            print("\nPrimeras 10 filas con outliers:")
-            print(filas_con_outliers.head(10).to_string())
-            
-            # Guardar datos eliminados
-            self.datos_eliminados['outliers'] = filas_con_outliers.copy()
-            
-            # Eliminar outliers
-            self.df_limpio = self.df_limpio.drop(filas_con_outliers.index)
-            self.df_limpio = self.df_limpio.reset_index(drop=True)
+        # Mostrar resumen
+        if total_valores_winsorizados > 0:
+            if aplicar_winsorizar:
+                print(f"\n Total de valores winsorizados: {total_valores_winsorizados}")
+                print(f" Columnas afectadas: {len(valores_modificados)}")
+                print("\n Nota: Las filas se mantienen, solo se ajustaron los valores extremos")
+            else:
+                print(f"\n Total de outliers detectados: {total_valores_winsorizados}")
+                print(f" Columnas con outliers: {len(valores_modificados)}")
+                print("\n Nota: Los outliers NO fueron modificados (solo detección)")
         else:
             print("\n No se encontraron outliers")
         
-        filas_eliminadas_total = tamaño_inicial - len(self.df_limpio)
-        print(f"\n Filas eliminadas: {filas_eliminadas_total}")
-        print(f" Filas restantes: {len(self.df_limpio)}\n")
+        print(f" Filas totales (sin cambios): {len(self.df_limpio)}\n")
     
     def exportar_datos_limpios(self):
         """Exporta los datos limpios a un archivo CSV"""
         try:
-            ruta_completa = os.path.join(os.path.dirname(__file__), self.archivo_salida)
+            ruta_completa = os.path.join(os.path.dirname(__file__), '..', 'data', 'processed', self.archivo_salida)
             self.df_limpio.to_csv(ruta_completa, index=False)
-            print(f" Datos limpios exportados exitosamente a: {self.archivo_salida}")
+            print(f" Datos limpios exportados exitosamente a: data/processed/{self.archivo_salida}")
             return True
         except Exception as e:
             print(f" Error al exportar datos: {str(e)}")
@@ -228,7 +240,7 @@ class LimpiadorDatos:
         print(f"   Filas originales: {len(self.df_original)}")
         print(f"   Filas eliminadas por datos faltantes: {len(self.datos_eliminados['faltantes'])}")
         print(f"   Filas eliminadas por datos irracionales: {len(self.datos_eliminados['irracionales'])}")
-        print(f"   Filas eliminadas por outliers: {len(self.datos_eliminados['outliers'])}")
+        print(f"   Outliers winsorizados (no eliminados): {len(self.datos_eliminados['outliers'])}")
         print(f"   Total de filas eliminadas: {total_eliminados}")
         print(f"   Filas finales: {len(self.df_limpio)}")
         print(f"   Porcentaje de datos conservados: {(len(self.df_limpio)/len(self.df_original)*100):.2f}%")
@@ -239,12 +251,13 @@ class LimpiadorDatos:
         print(f"   Salida: {self.archivo_salida}")
 
     
-    def ejecutar_limpieza_completa(self, factor_iqr=1.5):
+    def ejecutar_limpieza_completa(self, factor_iqr=1.5, aplicar_winsorizar=False):
         """
         Ejecuta el proceso completo de limpieza de datos
         
         Args:
             factor_iqr: Factor para detección de outliers (1.5=normal, 3.0=extremo)
+            aplicar_winsorizar: Si es True, winsoriza outliers; si es False, solo los detecta
         """
         print("\n" + "="*80)
         print("INICIO DE LIMPIEZA Y PREPARACIÓN DE DATOS")
@@ -260,7 +273,7 @@ class LimpiadorDatos:
         # Ejecutar limpieza
         self.eliminar_datos_faltantes()
         self.eliminar_datos_irracionales()
-        self.eliminar_outliers(factor_iqr=factor_iqr)
+        self.winsorizar_outliers(factor_iqr=factor_iqr, aplicar_winsorizar=aplicar_winsorizar)
         
         # Exportar datos limpios
         if self.exportar_datos_limpios():
@@ -279,7 +292,8 @@ def main():
     
     # Ejecutar limpieza completa
     # factor_iqr: 1.5 = outliers moderados, 3.0 = solo outliers extremos
-    exito = limpiador.ejecutar_limpieza_completa(factor_iqr=1.5)
+    # aplicar_winsorizar: False = solo detecta, True = winsoriza los outliers
+    exito = limpiador.ejecutar_limpieza_completa(factor_iqr=1.5, aplicar_winsorizar=False)
     
     if exito:
         print(" Proceso completado exitosamente")

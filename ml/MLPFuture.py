@@ -11,12 +11,12 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.multioutput import MultiOutputRegressor
 from xgboost import XGBRegressor
 
-# Cargar el archivo CSV desde el mismo directorio del script
+# Cargar el archivo CSV desde la carpeta data/processed
 BASE_DIR = Path(__file__).resolve().parent
-DATOS = BASE_DIR / "DatosLimpios.csv"
+DATOS = BASE_DIR.parent / "data" / "processed" / "DatosLimpios.csv"
 
 if not DATOS.exists():
-    raise FileNotFoundError(f"No se encontró el archivo de datos esperado en {DATOS}")
+    raise FileNotFoundError(f"No se encontró el archivo de datos esperado en {DATOS}\nEl archivo DatosLimpios.csv debe estar en la carpeta: data/processed/")
 
 df = pd.read_csv(DATOS)
 
@@ -65,9 +65,7 @@ print(f"Días totales: {df['FECHA_NUMERICO'].max()}")
 # Seleccionar columnas relevantes para el modelo
 # Variables independientes: tiempo + numéricas de proceso + categóricas codificadas
 numeric_extras = [
-    'Volumen (m3)', 'Humedad arena (%)', 'Agua (kg)',
-    'RHEO 1000 (kg)', 'BASF 719 (kg)', 'Delvo (litros)',
-    'MasterGlenium 7950', 'MasterGlenium 7970', 'Sika PP 48 (kg)-BARCHIP'
+    'Volumen (m3)'
 ]
 
 feature_cols = [
@@ -200,20 +198,59 @@ print(f"R² Validación: {mejores_metricas['r2_test']:.4f}")
 print(f"RMSE: {mejores_metricas['rmse_test']:.4f}")
 print(f"MAE: {mejores_metricas['mae_test']:.4f}")
 
-# Calcular MAPE promedio seguro (evita divisiones por valores cercanos a cero)
+# Calcular métricas detalladas por material
 y_test_original = scaler_y.inverse_transform(y_test)
 predictions_original = mejores_metricas['y_pred']
-eps = 1e-3
-mape_por_objetivo = []
-for i, objetivo in enumerate(targets):
-    real = np.abs(y_test_original[:, i])
+
+print(f"\n=== Métricas Detalladas por Material ===")
+r2_por_material = []
+mae_por_material = []
+mape_por_material = []
+rmse_por_material = []
+
+for i, material in enumerate(targets):
+    real = y_test_original[:, i]
     pred = predictions_original[:, i]
-    mape_i = np.mean(np.abs((real - pred) / np.maximum(real, eps))) * 100
-    mape_por_objetivo.append(mape_i)
-mape = np.mean(mape_por_objetivo)
-print(f"MAPE promedio: {mape:.2f}%")
-for obj, m in zip(targets, mape_por_objetivo):
-    print(f"  - {obj}: {m:.2f}%")
+    
+    # R² por material
+    r2_i = r2_score(real, pred)
+    r2_por_material.append(r2_i)
+    
+    # MAE por material
+    mae_i = mean_absolute_error(real, pred)
+    mae_por_material.append(mae_i)
+    
+    # RMSE por material
+    rmse_i = np.sqrt(mean_squared_error(real, pred))
+    rmse_por_material.append(rmse_i)
+    
+    # MAPE por material (con protección contra valores cercanos a cero)
+    # Filtrar valores reales mayores a un umbral para evitar divisiones inestables
+    umbral = 1.0  # kg
+    mask = np.abs(real) > umbral
+    if mask.sum() > 0:
+        mape_i = np.mean(np.abs((real[mask] - pred[mask]) / real[mask])) * 100
+    else:
+        mape_i = np.nan
+    mape_por_material.append(mape_i)
+    
+    print(f"\n{material}:")
+    print(f"  R²:   {r2_i:.4f}")
+    print(f"  MAE:  {mae_i:.2f} kg")
+    print(f"  RMSE: {rmse_i:.2f} kg")
+    if not np.isnan(mape_i):
+        print(f"  MAPE: {mape_i:.2f}% (excluyendo valores < {umbral} kg)")
+    else:
+        print(f"  MAPE: No calculable (todos los valores < {umbral} kg)")
+
+# Promedios
+print(f"\n=== Promedios ===")
+print(f"R² promedio:   {np.mean(r2_por_material):.4f}")
+print(f"MAE promedio:  {np.mean(mae_por_material):.2f} kg")
+print(f"RMSE promedio: {np.mean(rmse_por_material):.2f} kg")
+mape_validos = [m for m in mape_por_material if not np.isnan(m)]
+if mape_validos:
+    print(f"MAPE promedio: {np.mean(mape_validos):.2f}%")
 
 # Guardar el mejor modelo en un archivo .pkl
 MODEL_PATH = BASE_DIR / 'modelo_prediccion_materiales.pkl'
@@ -230,11 +267,13 @@ with open(MODEL_PATH, 'wb') as file:
         'fecha_min': fecha_min,  # Guardar la fecha mínima para conversiones futuras
         'fecha_max': df['FECHA'].max(),  # Guardar fecha máxima del entrenamiento
         'metricas': {
-            'mse': mejores_metricas['mse_test'],
-            'rmse': mejores_metricas['rmse_test'],
-            'r2': mejores_metricas['r2_test'],
-            'mae': mejores_metricas['mae_test'],
-            'mape': mape
+            'r2_global': mejores_metricas['r2_test'],
+            'mae_global': mejores_metricas['mae_test'],
+            'rmse_global': mejores_metricas['rmse_test'],
+            'r2_por_material': {material: r2 for material, r2 in zip(targets, r2_por_material)},
+            'mae_por_material': {material: mae for material, mae in zip(targets, mae_por_material)},
+            'rmse_por_material': {material: rmse for material, rmse in zip(targets, rmse_por_material)},
+            'mape_por_material': {material: mape for material, mape in zip(targets, mape_por_material)}
         }
     }, file)
 print(f'\n✓ Modelo guardado exitosamente en: {MODEL_PATH}')
@@ -244,15 +283,7 @@ def predecir_materiales(
     fecha_str,
     turno='DIA',
     diseno='OTROS',
-    volumen=0.0,
-    humedad=0.0,
-    agua=0.0,
-    rheo=0.0,
-    basf=0.0,
-    delvo=0.0,
-    mg7950=0.0,
-    mg7970=0.0,
-    sika=0.0
+    volumen=0.0
 ):
     """Predice las cantidades de materiales necesarios para una fecha futura.
 
@@ -261,14 +292,6 @@ def predecir_materiales(
         turno: 'DIA' o 'NOCHE'
         diseno: nombre del diseño de mezcla (se mapea al top 10, si no, 'OTROS')
         volumen: Volumen (m3)
-        humedad: Humedad arena (%)
-        agua: Agua (kg)
-        rheo: RHEO 1000 (kg)
-        basf: BASF 719 (kg)
-        delvo: Delvo (litros)
-        mg7950: MasterGlenium 7950
-        mg7970: MasterGlenium 7970
-        sika: Sika PP 48 (kg)-BARCHIP
     """
     try:
         fecha_prediccion = pd.to_datetime(fecha_str)
@@ -304,15 +327,7 @@ def predecir_materiales(
             np.sin(2 * np.pi * semana_anio / 52),
             np.cos(2 * np.pi * semana_anio / 52),
             int(turno_bin),
-            volumen,
-            humedad,
-            agua,
-            rheo,
-            basf,
-            delvo,
-            mg7950,
-            mg7970,
-            sika
+            volumen
         ]
 
         entrada_list = base_features + [dummies_input[col] for col in dummies_diseno.columns]
@@ -334,23 +349,19 @@ def predecir_materiales(
         print(f"Error en la predicción: {e}")
         return None
 
+
 # Ejemplos de predicción para fechas futuras
 print(f'\n=== Predicciones para Fechas Futuras ===')
 print(f'Fecha máxima de entrenamiento: {df["FECHA"].max().strftime("%Y-%m-%d")}')
-print(f'\nPredicciones:')
 
 fechas_futuras = [
     {
         'fecha_str': '2026-01-15', 'turno': 'DIA', 'diseno': top_diseno[0] if top_diseno else 'OTROS',
-        'volumen': 6, 'humedad': 0.05, 'agua': 950, 'rheo': 50, 'basf': 18, 'delvo': 6, 'mg7950': 0, 'mg7970': 0, 'sika': 24
+        'volumen': 6
     },
     {
         'fecha_str': '2026-02-15', 'turno': 'NOCHE', 'diseno': top_diseno[1] if len(top_diseno) > 1 else 'OTROS',
-        'volumen': 6, 'humedad': 0.05, 'agua': 930, 'rheo': 50, 'basf': 18, 'delvo': 6, 'mg7950': 0, 'mg7970': 0, 'sika': 24
-    },
-    {
-        'fecha_str': '2026-06-15', 'turno': 'DIA', 'diseno': top_diseno[2] if len(top_diseno) > 2 else 'OTROS',
-        'volumen': 5, 'humedad': 0.06, 'agua': 880, 'rheo': 45, 'basf': 16, 'delvo': 5, 'mg7950': 0, 'mg7970': 0, 'sika': 22
+        'volumen': 6
     }
 ]
 
@@ -400,8 +411,13 @@ for idx, material in enumerate(targets):
     ax3.grid(True, alpha=0.3, axis='y')
 
 plt.tight_layout()
-plt.savefig(BASE_DIR / 'prediccion_materiales_detallado.png', dpi=300, bbox_inches='tight')
-print(f"\n✓ Gráfico detallado guardado en: {BASE_DIR / 'prediccion_materiales_detallado.png'}")
+
+# Crear carpeta de gráficas si no existe
+GRAFICAS_DIR = BASE_DIR / 'graficas'
+GRAFICAS_DIR.mkdir(exist_ok=True)
+
+plt.savefig(GRAFICAS_DIR / 'prediccion_materiales_detallado.png', dpi=300, bbox_inches='tight')
+print(f"\n✓ Gráfico detallado guardado en: {GRAFICAS_DIR / 'prediccion_materiales_detallado.png'}")
 
 # Gráfico de series de tiempo
 plt.figure(figsize=(15, 8))
@@ -421,8 +437,8 @@ for idx, material in enumerate(targets):
     plt.xticks(rotation=45)
 
 plt.tight_layout()
-plt.savefig(BASE_DIR / 'serie_tiempo_materiales.png', dpi=300, bbox_inches='tight')
-print(f"✓ Gráfico de series de tiempo guardado en: {BASE_DIR / 'serie_tiempo_materiales.png'}")
+plt.savefig(GRAFICAS_DIR / 'serie_tiempo_materiales.png', dpi=300, bbox_inches='tight')
+print(f"✓ Gráfico de series de tiempo guardado en: {GRAFICAS_DIR / 'serie_tiempo_materiales.png'}")
 
 # Gráfico de métricas comparativas
 fig, axes = plt.subplots(1, 2, figsize=(15, 5))
@@ -447,8 +463,8 @@ ax2.set_title('Comparación de MAE por Modelo', fontweight='bold')
 ax2.grid(True, alpha=0.3, axis='x')
 
 plt.tight_layout()
-plt.savefig(BASE_DIR / 'comparacion_modelos.png', dpi=300, bbox_inches='tight')
-print(f"✓ Gráfico de comparación guardado en: {BASE_DIR / 'comparacion_modelos.png'}")
+plt.savefig(GRAFICAS_DIR / 'comparacion_modelos.png', dpi=300, bbox_inches='tight')
+print(f"✓ Gráfico de comparación guardado en: {GRAFICAS_DIR / 'comparacion_modelos.png'}")
 
 print(f"\n{'='*50}")
 print(f" Entrenamiento completado exitosamente")

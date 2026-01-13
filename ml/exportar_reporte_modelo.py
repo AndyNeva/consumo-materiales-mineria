@@ -18,7 +18,9 @@ from reportlab.lib.colors import HexColor
 # Configuración de rutas
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / 'modelo_prediccion_materiales.pkl'
-PDF_PATH = BASE_DIR / 'Reporte_Modelo_Prediccion_Materiales.pdf'
+DOCS_DIR = BASE_DIR.parent / 'docs'
+DOCS_DIR.mkdir(exist_ok=True)
+PDF_PATH = DOCS_DIR / 'Reporte_Modelo_Prediccion_Materiales.pdf'
 
 # Verificar que exista el modelo
 if not MODEL_PATH.exists():
@@ -102,9 +104,9 @@ story.append(Spacer(1, 0.5*inch))
 info_portada = [
     ["Modelo:", model_data['model_name']],
     ["Fecha de Generación:", datetime.now().strftime("%d/%m/%Y %H:%M")],
-    ["R² Score:", f"{model_data['metricas']['r2']:.4f}"],
-    ["RMSE:", f"{model_data['metricas']['rmse']:.2f} kg"],
-    ["MAE:", f"{model_data['metricas']['mae']:.2f} kg"],
+    ["R² Score:", f"{model_data['metricas']['r2_global']:.4f}"],
+    ["RMSE:", f"{model_data['metricas']['rmse_global']:.2f} kg"],
+    ["MAE:", f"{model_data['metricas']['mae_global']:.2f} kg"],
 ]
 tabla_portada = Table(info_portada, colWidths=[2*inch, 3*inch])
 tabla_portada.setStyle(TableStyle([
@@ -250,9 +252,9 @@ story.append(Paragraph("5. RESULTADOS Y MÉTRICAS", styles['CustomHeading2']))
 story.append(Paragraph("5.1 Métricas Globales", styles['CustomHeading3']))
 metricas_globales = [
     ["Métrica", "Valor", "Interpretación"],
-    ["R² Score", f"{model_data['metricas']['r2']:.4f}", "99.87% de varianza explicada"],
-    ["RMSE", f"{model_data['metricas']['rmse']:.2f} kg", "Error promedio cuadrático"],
-    ["MAE", f"{model_data['metricas']['mae']:.2f} kg", "Error absoluto medio"],
+    ["R² Score", f"{model_data['metricas']['r2_global']:.4f}", "Varianza explicada"],
+    ["RMSE", f"{model_data['metricas']['rmse_global']:.2f} kg", "Error promedio cuadrático"],
+    ["MAE", f"{model_data['metricas']['mae_global']:.2f} kg", "Error absoluto medio"],
 ]
 tabla_metricas = Table(metricas_globales, colWidths=[1.8*inch, 1.5*inch, 3*inch])
 tabla_metricas.setStyle(TableStyle([
