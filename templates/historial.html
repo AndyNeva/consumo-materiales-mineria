@@ -6,441 +6,179 @@
   <title>Historial | Planta de Hormigón</title>
   <style>
     :root{
-      --bg:#0b1220;
-      --surface:#0f1a2e;
-      --surface2:#0c1628;
-      --card:#101f37;
+      --bg:#0b1220; --surface:#0f1a2e; --surface2:#0c1628; --card:#101f37;
       --border:rgba(255,255,255,.08);
       --muted:rgba(255,255,255,.72);
       --text:rgba(255,255,255,.92);
       --accent:#4f8cff;
-      --accent2:#79a7ff;
-      --good:#22c55e;
-      --warn:#f59e0b;
-      --bad:#ef4444;
       --shadow: 0 10px 30px rgba(0,0,0,.35);
-      --radius:16px;
-      --radius2:22px;
+      --radius:16px; --radius2:22px;
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      --good:#22c55e; --warn:#f59e0b; --bad:#ef4444;
     }
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; }
+    *{box-sizing:border-box}
     body{
-      margin:0;
-      font-family: var(--sans);
-      color: var(--text);
+      margin:0; font-family:var(--sans); color:var(--text);
       background:
         radial-gradient(1200px 600px at 15% 10%, rgba(79,140,255,.25), transparent 60%),
         radial-gradient(900px 500px at 85% 20%, rgba(121,167,255,.18), transparent 55%),
         radial-gradient(900px 600px at 55% 95%, rgba(34,197,94,.10), transparent 60%),
         linear-gradient(180deg, var(--bg), #070b14 70%);
-      letter-spacing:.2px;
     }
-    a{ color:inherit; text-decoration:none; }
-    .app{
-      min-height:100%;
-      display:grid;
-      grid-template-columns: 280px 1fr;
-    }
+    a{color:inherit;text-decoration:none}
+    .app{min-height:100vh;display:grid;grid-template-columns:280px 1fr}
     .sidebar{
       padding:22px 18px;
       background: linear-gradient(180deg, rgba(15,26,46,.95), rgba(12,22,40,.88));
-      border-right: 1px solid var(--border);
-      position: sticky;
-      top:0;
-      height:100vh;
+      border-right:1px solid var(--border);
     }
-    .brand{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      padding:10px 10px 16px 10px;
-      border-bottom:1px solid var(--border);
-      margin-bottom:16px;
-    }
-    .logo{
-      width:38px;height:38px;border-radius:12px;
-      background: radial-gradient(circle at 30% 30%, rgba(121,167,255,.85), rgba(79,140,255,.55) 45%, rgba(34,197,94,.25));
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.10);
-    }
-    .brand h1{
-      margin:0;
-      font-size:14px;
-      font-weight:650;
-      line-height:1.2;
-    }
-    .brand small{
-      display:block;
-      margin-top:3px;
-      font-size:12px;
-      color: var(--muted);
-      font-weight:500;
-    }
+    .brand{display:flex;align-items:center;gap:12px;padding:10px 10px 16px;border-bottom:1px solid var(--border);margin-bottom:16px}
+    .logo{width:38px;height:38px;border-radius:12px;background: radial-gradient(circle at 30% 30%, rgba(121,167,255,.85), rgba(79,140,255,.55) 45%, rgba(34,197,94,.25));box-shadow: inset 0 0 0 1px rgba(255,255,255,.10);}
+    .brand h1{margin:0;font-size:14px;font-weight:650;line-height:1.2}
+    .brand small{display:block;margin-top:3px;font-size:12px;color:var(--muted);font-weight:500}
 
-    .nav{
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      margin-top:14px;
-    }
-    .nav a{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding:10px 12px;
-      border-radius:14px;
-      border:1px solid transparent;
-      color:rgba(255,255,255,.86);
-      background:transparent;
-      transition: transform .12s ease, background .12s ease, border-color .12s ease;
-    }
-    .nav a:hover{
-      background: rgba(255,255,255,.04);
-      border-color: rgba(255,255,255,.08);
-      transform: translateY(-1px);
-    }
-    .nav a.active{
-      background: linear-gradient(180deg, rgba(79,140,255,.18), rgba(79,140,255,.08));
-      border-color: rgba(79,140,255,.35);
-    }
-    .icon{
-      width:18px; height:18px; flex:0 0 18px;
-      opacity:.92;
-    }
-    .spacer{ flex:1; }
-    .userbox{
-      margin-top:18px;
-      padding:14px 12px;
-      border-radius: var(--radius);
-      background: rgba(255,255,255,.03);
-      border:1px solid var(--border);
-    }
-    .userline{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      margin-bottom:10px;
-    }
-    .chip{
-      font-family: var(--mono);
-      font-size:11px;
-      padding:5px 8px;
-      border-radius: 999px;
-      background: rgba(79,140,255,.14);
-      border:1px solid rgba(79,140,255,.25);
-      color: rgba(255,255,255,.90);
-      white-space:nowrap;
-    }
-    .btn{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:10px 12px;
-      border-radius: 14px;
-      background: rgba(255,255,255,.04);
-      border:1px solid var(--border);
-      color: rgba(255,255,255,.92);
-      cursor:pointer;
-      transition: transform .12s ease, background .12s ease, border-color .12s ease;
-      width:100%;
-      justify-content:center;
-      font-weight:600;
-    }
-    .btn:hover{
-      transform: translateY(-1px);
-      background: rgba(255,255,255,.06);
-      border-color: rgba(255,255,255,.12);
-    }
-    .btn.danger{
-      background: rgba(239,68,68,.10);
-      border-color: rgba(239,68,68,.25);
-    }
+    .nav{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+    .nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;border:1px solid transparent;color:rgba(255,255,255,.86);transition:.12s}
+    .nav a:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08);transform:translateY(-1px)}
+    .nav a.active{background: linear-gradient(180deg, rgba(79,140,255,.18), rgba(79,140,255,.08));border-color:rgba(79,140,255,.35)}
+    .icon{width:18px;height:18px;flex:0 0 18px;opacity:.92}
 
-    /* Main */
-    .main{
-      padding:26px 26px 40px 26px;
-    }
-    .topbar{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:18px;
-      margin-bottom:18px;
-    }
-    .title h2{
-      margin:0;
-      font-size:22px;
-      letter-spacing:.2px;
-    }
-    .title p{
-      margin:8px 0 0 0;
-      color: var(--muted);
-      font-size:13px;
-      max-width: 62ch;
-      line-height:1.45;
-    }
-    .actions{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-    }
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:10px 12px;
-      border-radius: 999px;
-      border:1px solid var(--border);
-      background: rgba(255,255,255,.03);
-      font-weight:650;
-      font-size:13px;
-      cursor:pointer;
-      transition: background .12s ease, transform .12s ease, border-color .12s ease;
-      white-space:nowrap;
-    }
-    .pill:hover{
-      transform: translateY(-1px);
-      background: rgba(255,255,255,.05);
-      border-color: rgba(255,255,255,.12);
-    }
+    .main{padding:26px 26px 40px}
+    .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+    .title h2{margin:0;font-size:22px}
+    .title p{margin:8px 0 0;color:var(--muted);font-size:13px;max-width:90ch;line-height:1.45}
 
-    .grid{
-      display:grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap:14px;
-      margin-top:14px;
-    }
     .card{
-      grid-column: span 4;
       border-radius: var(--radius2);
       background: linear-gradient(180deg, rgba(16,31,55,.92), rgba(12,22,40,.92));
       border:1px solid var(--border);
       box-shadow: var(--shadow);
-      padding:16px 16px 14px 16px;
-      overflow:hidden;
-      position:relative;
-    }
-    .card::after{
-      content:"";
-      position:absolute;
-      inset:-1px;
-      background: radial-gradient(800px 220px at 20% 0%, rgba(79,140,255,.12), transparent 60%);
-      pointer-events:none;
-    }
-    .card h3{
-      margin:0 0 10px 0;
-      font-size:13px;
-      color: rgba(255,255,255,.86);
-      font-weight:650;
-      letter-spacing:.2px;
-      position:relative;
-    }
-    .kpi{
-      display:flex;
-      align-items:baseline;
-      justify-content:space-between;
-      gap:12px;
-      position:relative;
-    }
-    .kpi .value{
-      font-size:28px;
-      font-weight:750;
-      letter-spacing:.2px;
-    }
-    .kpi .sub{
-      font-size:12px;
-      color: var(--muted);
-      margin-top:6px;
-      line-height:1.35;
-    }
-    .trend{
-      font-family: var(--mono);
-      font-size:12px;
-      padding:6px 10px;
-      border-radius: 999px;
-      border:1px solid var(--border);
-      background: rgba(255,255,255,.03);
-      color: rgba(255,255,255,.88);
-      white-space:nowrap;
-      position:relative;
-    }
-    .trend.good{ border-color: rgba(34,197,94,.30); background: rgba(34,197,94,.10); }
-    .trend.warn{ border-color: rgba(245,158,11,.30); background: rgba(245,158,11,.10); }
-    .trend.bad{ border-color: rgba(239,68,68,.30); background: rgba(239,68,68,.10); }
-
-    .wide{
-      grid-column: span 8;
       padding:16px;
     }
-    .panel{
-      border-radius: var(--radius2);
-      background: rgba(255,255,255,.03);
-      border:1px solid var(--border);
-      padding:14px;
-      position:relative;
-      overflow:hidden;
-    }
-    .panel h4{
-      margin:0 0 12px 0;
-      font-size:13px;
-      font-weight:700;
-      color: rgba(255,255,255,.88);
-      letter-spacing:.2px;
-    }
-    .table{
+    label{font-size:12px;color:var(--muted)}
+    input,select{
       width:100%;
-      border-collapse: collapse;
-      font-size:13px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      border-radius:14px;
+      padding:10px 12px;
+      outline:none;
     }
-    .table th, .table td{
-      padding:10px 10px;
-      border-bottom:1px solid rgba(255,255,255,.06);
-      text-align:left;
-      vertical-align:top;
+    input:focus,select:focus{border-color:rgba(79,140,255,.45);box-shadow:0 0 0 4px rgba(79,140,255,.18);background:rgba(255,255,255,.06)}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1}
+
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:10px 12px;border-radius:14px;
+      background: rgba(255,255,255,.04);
+      border:1px solid var(--border);
+      color: rgba(255,255,255,.92);
+      cursor:pointer;font-weight:700;
+      transition:.12s;
     }
-    .table th{
-      color: rgba(255,255,255,.72);
-      font-weight:650;
-      font-size:12px;
-      letter-spacing:.2px;
+    .btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+    .btn.primary{background: rgba(79,140,255,.18); border-color: rgba(79,140,255,.35);}
+
+    .meta{
+      margin-top:12px;
+      display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+      color:var(--muted);font-size:12px;
     }
-    .badge{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
+    .chip{
+      font-family:var(--mono);
+      font-size:11px;
       padding:6px 10px;
       border-radius:999px;
-      border:1px solid var(--border);
       background: rgba(255,255,255,.03);
-      font-size:12px;
+      border:1px solid var(--border);
+      color: rgba(255,255,255,.88);
+    }
+
+    .table-wrap{
+      margin-top:14px;
+      overflow:auto;
+      border:1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,.03);
+      box-shadow: var(--shadow);
+    }
+    table{width:100%;border-collapse:collapse;min-width:1600px}
+    thead th{
+      position:sticky;top:0;z-index:1;
+      text-align:left;font-size:12px;color:var(--muted);
+      background: rgba(255,255,255,.04);
+      border-bottom:1px solid var(--border);
+      padding:12px 14px;
+      white-space:nowrap;
+    }
+    tbody td{
+      padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06);
+      font-size:13px;white-space:nowrap;
+    }
+    tbody tr:hover{background:rgba(79,140,255,.06)}
+    .hint{margin-top:10px;font-size:12px;color:var(--muted)}
+    select option{color:#0f172a;background:#fff}
+    @media(max-width:980px){.app{grid-template-columns:1fr}.sidebar{display:none}}
+
+    .summary{
+      margin-top:14px;
+      border:1px solid var(--border);
+      border-radius: var(--radius2);
+      padding:12px;
+      background: rgba(255,255,255,.03);
+    }
+    .summary h3{margin:0 0 10px;font-size:14px}
+    .summary-grid{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap:10px;
+    }
+    .sum-card{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:16px;
+      padding:10px;
+      background: rgba(255,255,255,.03);
+    }
+    .sum-card .k{font-size:11px;color:var(--muted);font-family:var(--mono)}
+    .sum-card .v{font-size:14px;margin-top:4px;font-weight:800}
+
+    .alerts{
+      margin-top:14px;
+      border:1px solid var(--border);
+      border-radius: var(--radius2);
+      padding:12px;
+      background: rgba(255,255,255,.03);
+    }
+    .alerts h3{margin:0 0 10px;font-size:14px}
+    .alerts .sub{margin:0 0 10px;color:var(--muted);font-size:12px}
+    .alerts-table{width:100%;border-collapse:collapse;min-width:980px}
+    .alerts-table th, .alerts-table td{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      font-size:13px;
+      white-space:nowrap;
+    }
+    .tag{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.03);
       font-family: var(--mono);
     }
-    .dot{
-      width:8px;height:8px;border-radius:99px;
-      background: rgba(255,255,255,.35);
-      box-shadow: 0 0 0 2px rgba(255,255,255,.08);
-    }
-    .dot.good{ background: var(--good); }
-    .dot.warn{ background: var(--warn); }
-    .dot.bad{ background: var(--bad); }
-
-    .toast{
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      max-width: 360px;
-      display:none;
-      z-index: 9999;
-    }
-    .toast .inner{
-      padding:12px 12px;
-      border-radius: 16px;
-      background: rgba(15,26,46,.95);
-      border:1px solid var(--border);
-      box-shadow: var(--shadow);
-      display:flex;
-      gap:10px;
-      align-items:flex-start;
-    }
-    .toast .inner b{ display:block; margin-bottom:4px; }
-    .toast .inner p{ margin:0; color: var(--muted); font-size:13px; line-height:1.35; }
-
-    @media (max-width: 980px){
-      .app{ grid-template-columns: 1fr; }
-      .sidebar{ position:relative; height:auto; }
-      .grid{ grid-template-columns: repeat(6, 1fr); }
-      .card{ grid-column: span 3; }
-      .wide{ grid-column: span 6; }
-    }
-    @media (max-width: 620px){
-      .grid{ grid-template-columns: repeat(2, 1fr); }
-      .card{ grid-column: span 2; }
-      .wide{ grid-column: span 2; }
-      .actions{ justify-content:flex-start; }
-    }
-  
-
-
-.page{padding: 18px;}
-.row{display:flex; gap:12px; flex-wrap:wrap;}
-.field{display:flex; flex-direction:column; gap:6px; min-width:220px; flex:1;}
-label{font-size:12px;color:var(--muted);}
-input, select, textarea{
-  width:100%;
-  border:1px solid var(--border);
-  background: rgba(255,255,255,.04);
-  color: var(--text);
-  border-radius: 14px;
-  padding: 10px 12px;
-  outline:none;
-  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-}
-input::placeholder, textarea::placeholder{color: rgba(255,255,255,.45);}
-input:focus, select:focus, textarea:focus{
-  border-color: rgba(79,140,255,.45);
-  box-shadow: 0 0 0 4px rgba(79,140,255,.18);
-  background: rgba(255,255,255,.06);
-}
-.table-wrap{
-  overflow:auto;
-  border:1px solid var(--border);
-  border-radius: var(--radius2);
-  background: rgba(255,255,255,.03);
-  box-shadow: var(--shadow);
-}
-table{width:100%; border-collapse:collapse; min-width: 820px;}
-thead th{
-  position:sticky; top:0; z-index:1;
-  text-align:left;
-  font-size:12px;
-  color: var(--muted);
-  background: rgba(255,255,255,.04);
-  border-bottom:1px solid var(--border);
-  padding: 12px 14px;
-}
-tbody td{
-  padding: 12px 14px;
-  border-bottom:1px solid var(--border);
-  vertical-align:top;
-  font-size: 14px;
-}
-tbody tr:hover{ background: rgba(79,140,255,.06); }
-.badge{
-  display:inline-flex; align-items:center; gap:8px;
-  font-size: 12px; font-weight: 700;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border:1px solid var(--border);
-  background: rgba(255,255,255,.03);
-  white-space:nowrap;
-}
-.badge.ok{ border-color: rgba(34,197,94,.35); color: rgba(34,197,94,.95); background: rgba(34,197,94,.08); }
-.badge.low{ border-color: rgba(245,158,11,.35); color: rgba(245,158,11,.95); background: rgba(245,158,11,.10); }
-.badge.critical{ border-color: rgba(239,68,68,.35); color: rgba(239,68,68,.95); background: rgba(239,68,68,.10); }
-
-.alert{
-  border:1px solid var(--border);
-  border-left: 6px solid var(--accent);
-  background: rgba(255,255,255,.03);
-  border-radius: var(--radius2);
-  padding: 12px 14px;
-  box-shadow: var(--shadow);
-  color: var(--text);
-  font-size: 13px;
-}
-.alert.good{ border-left-color: var(--good); }
-.alert.warn{ border-left-color: var(--warn); }
-.alert.bad{ border-left-color: var(--bad); }
-</style>
+    .tag.bad{border-color:rgba(239,68,68,.45); background: rgba(239,68,68,.10)}
+    .tag.warn{border-color:rgba(245,158,11,.45); background: rgba(245,158,11,.10)}
+    .tag.good{border-color:rgba(34,197,94,.45); background: rgba(34,197,94,.10)}
+  </style>
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
+        <div class="logo"></div>
         <div>
           <h1>Planta de Hormigón</h1>
           <small>Control de producción & inventario</small>
@@ -448,484 +186,134 @@ tbody tr:hover{ background: rgba(79,140,255,.06); }
       </div>
 
       <nav class="nav" aria-label="Navegación">
-        <a class="active" href="dashboard.html" aria-current="page">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M3 13.5V21h7v-7.5H3Z" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M14 3v9h7V3h-7Z" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M14 14.5V21h7v-6.5h-7Z" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M3 3v8h7V3H3Z" stroke="currentColor" stroke-width="1.8"/>
-          </svg>
-          Dashboard
-        </a>
-        <a href="registro.html">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M7 4h10a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2V6a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M9 9h8M9 13h8M9 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-          Registro diario
-        </a>
-        <a href="inventario.html">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M21 8l-9-5-9 5 9 5 9-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-            <path d="M3 8v10l9 5 9-5V8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-            <path d="M12 13v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-          Inventario
-        </a>
-        <a href="historial.html">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M7 6h14M7 12h14M7 18h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            <path d="M3.5 6h.5M3.5 12h.5M3.5 18h.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-          </svg>
-          Historial
-        </a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/registro">Registro diario</a>
+        <a href="/inventario">Inventario</a>
+        <a class="active" href="/historial" aria-current="page">Historial</a>
       </nav>
-
-      <div class="spacer"></div>
-
-      <div class="userbox">
-        <div class="userline">
-          <div>
-            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Sesión</div>
-            <div id="lblUser" class="chip">Sin usuario</div>
-          </div>
-          <div class="chip" id="todayChip">—</div>
-        </div>
-        <button class="btn danger" id="btnLogout" type="button">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M10 7V6a2 2 0 0 1 2-2h7v16h-7a2 2 0 0 1-2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            <path d="M14 12H4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            <path d="M7 9l-3 3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Cerrar sesión
-        </button>
-      </div>
     </aside>
+
     <main class="main">
       <div class="topbar">
-        <button class="menu" id="btnToggleNav" type="button" aria-label="Abrir menú">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-        </button>
         <div class="title">
           <h2>Historial</h2>
-          <p>Consulta y filtra los registros guardados localmente (por fecha, diseño, destino, etc.).</p>
+          <p>Incluye consumo estimado (receta × volumen) y ahora el cruce vs stock para alertas y requerimiento sugerido (Paso 3).</p>
         </div>
-        <div class="actions">
-<a class="pill" href="registro.html" title="Registrar producción">
-  <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-  </svg>
-  Nuevo registro
-</a>
-<a class="pill" href="inventario.html" title="Ver inventario">
-  <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path d="M3 7h18M6 7v14h12V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-    <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-  </svg>
-  Inventario
-</a>
-</div>
       </div>
 
-      <div class="page">
-        <div class="card">
-  <h3 style="margin:0 0 10px; font-size:14px;">Historial y Búsqueda</h3>
+      <section class="card">
+        <form id="historialForm">
+          <div class="row">
+            <div class="field">
+              <label for="inicio">Inicio</label>
+              <input id="inicio" type="date" required />
+            </div>
+            <div class="field">
+              <label for="fin">Fin</label>
+              <input id="fin" type="date" required />
+            </div>
+            <div class="field">
+              <label for="diseno">Diseño</label>
+              <select id="diseno">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="zona">Destino (zona)</label>
+              <input id="zona" type="text" placeholder="Ej: Mina" />
+            </div>
+            <div class="field">
+              <label for="turno">Turno</label>
+              <select id="turno">
+                <option value="">Todos</option>
+                <option value="Diurno">Diurno</option>
+                <option value="Nocturno">Nocturno</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="wbs">WBS</label>
+              <input id="wbs" type="text" placeholder="Ej: 1.2.3.04.005" />
+            </div>
 
-  <div class="row">
-    <div class="field">
-      <label for="fDesde">Desde</label>
-      <input id="fDesde" type="date" />
-    </div>
-    <div class="field">
-      <label for="fHasta">Hasta</label>
-      <input id="fHasta" type="date" />
-    </div>
-    <div class="field">
-      <label for="fDiseno">Diseño de hormigón</label>
-      <select id="fDiseno">
-        <option value="">Todos</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="fDestino">Destino</label>
-      <select id="fDestino">
-        <option value="">Todos</option>
-      </select>
-    </div>
-    <div class="field" style="flex:0 0 auto; min-width: 160px; align-self:flex-end;">
-      <button class="btn" id="btnBuscar" type="button">Buscar</button>
-    </div>
-  </div>
+            <div class="field" style="flex:0 0 220px; align-self:flex-end;">
+              <button class="btn primary" type="submit">Buscar + Consumo + Alertas</button>
+            </div>
+          </div>
 
-  <div id="histEmpty" class="empty" style="display:none; margin-top:12px;">
-    <div class="bubble" aria-hidden="true">🔎</div>
-    <h3>Sin resultados</h3>
-    <p>Prueba con otro rango de fechas o registra consumos para ver historial.</p>
-  </div>
+          <div class="meta">
+            <span class="chip" id="totalChip">Total: 0</span>
+            <span class="chip" id="bstChip">BST: —</span>
+            <span class="chip" id="avlChip">AVL: —</span>
+            <span class="chip" id="statusChip">Estado: —</span>
+          </div>
 
-  <div id="histTableWrap" class="table-wrap" style="margin-top:12px; display:none;">
-    <table aria-label="Resultados historial">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th>Turno</th>
-          <th>Volumen (m³)</th>
-          <th>Diseño</th><th>Destino</th><th>WBS</th><th>Humedad arena (%)</th><th>Asentamiento (cm)</th><th>Temp mezcla (°C)</th><th>Material(es)</th><th>Cantidades</th>
-        </tr>
-      </thead>
-      <tbody id="histBody"></tbody>
-    </table>
-  </div>
+          <div class="summary" id="summaryBox" style="display:none;">
+            <h3>Resumen consumo estimado (rango filtrado)</h3>
+            <div class="summary-grid" id="summaryGrid"></div>
+            <div class="hint" id="summaryHint"></div>
+          </div>
 
+          <div class="alerts" id="alertsBox" style="display:none;">
+            <h3>Cruce consumo vs stock (Paso 3)</h3>
+            <p class="sub">Déficit sugerido = max(consumo_estimado - stock_actual, 0). “Bajo mínimo” compara stock_actual vs mínimo configurado del material.</p>
+            <div class="table-wrap" style="margin-top:10px;">
+              <table class="alerts-table">
+                <thead>
+                  <tr>
+                    <th>Material</th>
+                    <th>Unidad</th>
+                    <th>Stock actual</th>
+                    <th>Mínimo</th>
+                    <th>Consumo estimado</th>
+                    <th>Déficit sugerido</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyAlertas"></tbody>
+              </table>
+            </div>
+            <div class="hint" id="alertsHint"></div>
+          </div>
 
-  <div id="searchTimesWrap" class="alert" style="margin-top:12px; display:none;">
-    <b>Tiempos de búsqueda (ms)</b>
-    <div style="margin-top:6px; display:flex; gap:10px; flex-wrap:wrap;">
-      <span class="badge"><span class="dot"></span> BST: <span id="bstTime">—</span></span>
-      <span class="badge"><span class="dot"></span> AVL: <span id="avlTime">—</span></span>
-      <span class="badge"><span class="dot"></span> N: <span id="nCount">—</span></span>
-    </div>
-    <div style="margin-top:8px; color:var(--muted); font-size:12px; line-height:1.35;">
-      Medido en el navegador con <span style="font-family:var(--mono);">performance.now()</span> sobre búsquedas repetidas de claves del resultado filtrado.
-    </div>
-  </div>
+          <div class="table-wrap" aria-label="Tabla de historial">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Diseño</th>
+                  <th>Zona</th>
+                  <th>WBS</th>
+                  <th>Turno</th>
+                  <th>Volumen (m³)</th>
 
-</div>
-      </div>
+                  <th>EST Arena (kg)</th>
+                  <th>EST Grava (kg)</th>
+                  <th>EST Cem HE (kg)</th>
+                  <th>EST Cem IP (kg)</th>
+                  <th>EST Agua (kg)</th>
+
+                  <th>EST Rheo+Sika115</th>
+                  <th>EST BASF+Sika200</th>
+                  <th>EST Delvo</th>
+                  <th>EST Glenium 7950</th>
+                  <th>EST Glenium 7970</th>
+                  <th>EST Fibras</th>
+
+                  <th>Humedad (%)</th>
+                  <th>Asentamiento (cm)</th>
+                  <th>Temp (°C)</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyHistorial"></tbody>
+            </table>
+          </div>
+
+          <div class="hint" id="hint"></div>
+        </form>
+      </section>
     </main>
   </div>
-  
-<script>
-(function(){
-  const file = (location.pathname.split("/").pop() || "dashboard.html").toLowerCase();
-  document.querySelectorAll('.nav a').forEach(a=>{
-    const href = (a.getAttribute("href")||"").toLowerCase();
-    if(href === file) a.classList.add("active");
-  });
-  const btn = document.getElementById("btnToggleNav");
-  if(btn){
-    btn.addEventListener("click", ()=>{
-      const sb = document.querySelector(".sidebar");
-      if(sb) sb.classList.toggle("open");
-    });
-  }
-})();
-</script>
 
-  <script>
-
-const LS_INV = "ph_inventario";
-const LS_REG = "ph_registros";
-const LS_USER = "ph_user";
-
-let inventario = [];
-let registros = [];
-
-function uid(){ return Math.random().toString(16).slice(2) + Date.now().toString(16); }
-function safeNum(v){ const n = Number(v); return Number.isFinite(n) ? n : NaN; }
-function fmt(n){ if(!Number.isFinite(n)) return "0"; const isInt = Math.abs(n - Math.round(n)) < 1e-9; return isInt ? String(Math.round(n)) : String(n.toFixed(2)); }
-function todayISO(){ const d = new Date(); const off = d.getTimezoneOffset(); const local = new Date(d.getTime() - off*60*1000); return local.toISOString().slice(0,10); }
-function escapeHtml(s){ return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
-
-function toast(type, title, msg, ms=3500){
-  const wrap = document.getElementById("toasts");
-  const el = document.createElement("div");
-  el.className = "toast " + (type || "");
-  el.innerHTML = `
-    <div style="min-width:0">
-      <p class="t-title">${escapeHtml(title || "Aviso")}</p>
-      <p class="t-msg">${escapeHtml(msg || "")}</p>
-    </div>
-    <button class="x" type="button" aria-label="Cerrar notificación">×</button>
-  `;
-  el.querySelector(".x").addEventListener("click", () => el.remove());
-  wrap.appendChild(el);
-  window.setTimeout(() => { if (el.isConnected) el.remove(); }, ms);
-}
-
-function loadData(){
-  const inv = localStorage.getItem(LS_INV);
-  const reg = localStorage.getItem(LS_REG);
-
-  if (!inv){
-    inventario = [
-      { material: "RHEO 1000", unidad: "kg", stock: 1000, minimo: 500 },
-      { material: "Sika 115", unidad: "kg", stock: 800, minimo: 300 },
-      { material: "BASF 719", unidad: "kg", stock: 600, minimo: 250 },
-      { material: "Sika 200", unidad: "kg", stock: 600, minimo: 250 },
-      { material: "Delvo", unidad: "lt", stock: 200, minimo: 50 },
-      { material: "MasterGlenium 7950", unidad: "lt", stock: 300, minimo: 80 },
-      { material: "MasterGlenium 7970", unidad: "lt", stock: 300, minimo: 80 },
-      { material: "Sika PP 48-BARCHIP", unidad: "kg", stock: 120, minimo: 30 }
-    ];
-    localStorage.setItem(LS_INV, JSON.stringify(inventario));
-  } else {
-    try{ inventario = JSON.parse(inv) || []; }catch{ inventario = []; }
-  }
-
-  if (!reg){
-    registros = [];
-    localStorage.setItem(LS_REG, JSON.stringify(registros));
-  } else {
-    try{ registros = JSON.parse(reg) || []; }catch{ registros = []; }
-  }
-}
-function saveInventario(){ localStorage.setItem(LS_INV, JSON.stringify(inventario)); }
-function saveRegistros(){ localStorage.setItem(LS_REG, JSON.stringify(registros)); }
-
-function requireAuth(){
-  const u = localStorage.getItem(LS_USER);
-  if (!u){ window.location.href = "login.html"; return null; }
-  try{ return JSON.parse(u); }catch{ return null; }
-}
-function setUserLabel(user){
-  const el = document.getElementById("lblUser");
-  if (el) el.textContent = (user && user.usuario) ? user.usuario : "—";
-}
-function wireLogout(){
-  const b = document.getElementById("btnLogout");
-  if (!b) return;
-  b.addEventListener("click", () => {
-    localStorage.removeItem(LS_USER);
-    window.location.href = "login.html";
-  });
-}
-
-function normName(s){
-  return String(s || "")
-    .normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
-    .replace(/\s+/g," ").trim().toLowerCase();
-}
-function findInvItemByName(name){
-  const n = normName(name);
-  return inventario.find(it => normName(it.material) === n);
-}
-
-</script>
-<script>
-
-(function(){
-  const user = requireAuth();
-  if (!user) return;
-  setUserLabel(user);
-  wireLogout();
-  loadData();
-
-  function fillFilters(){
-    const selDis = document.getElementById("fDiseno");
-    const selDes = document.getElementById("fDestino");
-    const curDis = selDis.value;
-    const curDes = selDes.value;
-
-    
-    const disenos = Array.from(new Set((registros || []).map(r => r.diseno).filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b)));
-    selDis.innerHTML = '<option value="">Todos</option>';
-    disenos.forEach(d => {
-      const opt = document.createElement("option");
-      opt.value = d;
-      opt.textContent = d;
-      selDis.appendChild(opt);
-    });
-
-    
-    const destinos = Array.from(new Set((registros || []).map(r => r.destino).filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b)));
-    selDes.innerHTML = '<option value="">Todos</option>';
-    destinos.forEach(d => {
-      const opt = document.createElement("option");
-      opt.value = d;
-      opt.textContent = d;
-      selDes.appendChild(opt);
-    });
-
-    selDis.value = curDis || "";
-    selDes.value = curDes || "";
-  }
-
-
-
-  function render(list){
-    const empty = document.getElementById("histEmpty");
-    const wrap = document.getElementById("histTableWrap");
-    const body = document.getElementById("histBody");
-    body.innerHTML = "";
-
-    if (!list || list.length === 0){
-      wrap.style.display = "none";
-      empty.style.display = "grid";
-      return;
-    }
-    empty.style.display = "none";
-    wrap.style.display = "block";
-
-    list.forEach(r => {
-      const mats = (r.consumos || []).map(c => c.material).join(", ");
-      const cants = (r.consumos || []).map(c => fmt(Number(c.cantidad)) + (c.unidad ? " " + c.unidad : "")).join(", ");
-      const vol = Number(r.volumen ?? r.produccion ?? 0);
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${escapeHtml(r.fecha || "")}</td>
-        <td>${escapeHtml(r.turno || "—")}</td>
-        <td>${escapeHtml(fmt(vol))}</td>
-        <td>${escapeHtml(r.diseno || "—")}</td>
-        <td>${escapeHtml(r.destino || "—")}</td>
-        <td>${escapeHtml(r.wbs || "—")}</td>
-        <td>${escapeHtml(Number.isFinite(Number(r.humedadArena)) ? fmt(Number(r.humedadArena)) : "—")}</td>
-        <td>${escapeHtml(Number.isFinite(Number(r.asentamientoFinal)) ? fmt(Number(r.asentamientoFinal)) : "—")}</td>
-        <td>${escapeHtml(Number.isFinite(Number(r.tempMezcla)) ? fmt(Number(r.tempMezcla)) : "—")}</td>
-        <td>${escapeHtml(mats)}</td>
-        <td>${escapeHtml(cants)}</td>
-      `;
-      body.appendChild(tr);
-    });
-  }
-
-
-  // --- Medición de tiempos de búsqueda BST vs AVL (solo lectura, no altera datos) ---
-  function keyOf(r, idx){
-    return String(r.fecha||"") + "|" + String(r.diseno||"") + "|" + String(r.destino||"") + "|" + String(idx);
-  }
-
-  function BSTNode(k){ this.k=k; this.l=null; this.r=null; }
-  function bstInsert(root, k){
-    if(!root) return new BSTNode(k);
-    let cur=root;
-    while(true){
-      if(k < cur.k){
-        if(cur.l) cur=cur.l; else { cur.l=new BSTNode(k); break; }
-      }else{
-        if(cur.r) cur=cur.r; else { cur.r=new BSTNode(k); break; }
-      }
-    }
-    return root;
-  }
-  function bstSearch(root, k){
-    let cur=root;
-    while(cur){
-      if(k === cur.k) return true;
-      cur = (k < cur.k) ? cur.l : cur.r;
-    }
-    return false;
-  }
-
-  function AVLNode(k){ this.k=k; this.h=1; this.l=null; this.r=null; }
-  function h(n){ return n ? n.h : 0; }
-  function upd(n){ n.h = 1 + Math.max(h(n.l), h(n.r)); }
-  function bal(n){ return n ? h(n.l) - h(n.r) : 0; }
-  function rotR(y){
-    const x=y.l, t2=x.r;
-    x.r=y; y.l=t2;
-    upd(y); upd(x);
-    return x;
-  }
-  function rotL(x){
-    const y=x.r, t2=y.l;
-    y.l=x; x.r=t2;
-    upd(x); upd(y);
-    return y;
-  }
-  function avlInsert(node, k){
-    if(!node) return new AVLNode(k);
-    if(k < node.k) node.l = avlInsert(node.l, k);
-    else node.r = avlInsert(node.r, k);
-
-    upd(node);
-    const b = bal(node);
-
-    if(b > 1 && k < node.l.k) return rotR(node); // LL
-    if(b < -1 && k > node.r.k) return rotL(node); // RR
-    if(b > 1 && k > node.l.k){ node.l = rotL(node.l); return rotR(node); } // LR
-    if(b < -1 && k < node.r.k){ node.r = rotR(node.r); return rotL(node); } // RL
-
-    return node;
-  }
-  function avlSearch(root, k){
-    let cur=root;
-    while(cur){
-      if(k === cur.k) return true;
-      cur = (k < cur.k) ? cur.l : cur.r;
-    }
-    return false;
-  }
-
-  function computeSearchTimes(list){
-    const n = Array.isArray(list) ? list.length : 0;
-    const wrap = document.getElementById("searchTimesWrap");
-    const elBST = document.getElementById("bstTime");
-    const elAVL = document.getElementById("avlTime");
-    const elN = document.getElementById("nCount");
-
-    if(!wrap || !elBST || !elAVL || !elN) return;
-
-    if(n === 0){
-      wrap.style.display = "none";
-      return;
-    }
-
-    const keys = list.map((r,i)=> keyOf(r,i));
-
-    let bstRoot = null;
-    let avlRoot = null;
-    for(const k of keys){ bstRoot = bstInsert(bstRoot, k); }
-    for(const k of keys){ avlRoot = avlInsert(avlRoot, k); }
-
-    const reps = Math.max(1, Math.floor(2000 / n)); // ~2000 búsquedas totales
-    let t0 = performance.now();
-    for(let rep=0; rep<reps; rep++){
-      for(const k of keys){ bstSearch(bstRoot, k); }
-    }
-    let t1 = performance.now();
-
-    let t2 = performance.now();
-    for(let rep=0; rep<reps; rep++){
-      for(const k of keys){ avlSearch(avlRoot, k); }
-    }
-    let t3 = performance.now();
-
-    elBST.textContent = (t1 - t0).toFixed(3);
-    elAVL.textContent = (t3 - t2).toFixed(3);
-    elN.textContent = String(n);
-    wrap.style.display = "block";
-  }
-  // --- fin medición ---
-
-  function buscar(){
-    const desde = document.getElementById("fDesde").value;
-    const hasta = document.getElementById("fHasta").value;
-    const diseno = document.getElementById("fDiseno").value;
-    const destino = document.getElementById("fDestino").value;
-
-    const dDesde = desde ? new Date(desde + "T00:00:00") : null;
-    const dHasta = hasta ? new Date(hasta + "T23:59:59") : null;
-
-    let res = registros.slice();
-
-    res = res.filter(r => {
-      const d = new Date((r.fecha || "") + "T12:00:00");
-      if (dDesde && d < dDesde) return false;
-      if (dHasta && d > dHasta) return false;
-      return true;
-    });
-
-    if (diseno){
-      res = res.filter(r => (r.diseno || "") === diseno);
-    }
-    if (destino){
-      res = res.filter(r => (r.destino || "") === destino);
-    }
-
-    res.sort((a,b) => (b.fecha || "").localeCompare(a.fecha || ""));
-    render(res);
-    computeSearchTimes(res);
-  }
-
-  fillFilters();
-  document.getElementById("btnBuscar").addEventListener("click", buscar);
-  buscar();
-})();
-
-</script>
+  <script src="/static/js/historial.js"></script>
 </body>
 </html>
