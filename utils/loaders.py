@@ -110,6 +110,54 @@ def alertas_inventario():
     
     return alertas, alertas_cant
 
+def obtener_estado_materiales():
+    """
+    Obtiene el estado completo de todos los materiales en el inventario.
+    
+    Devuelve:
+        list[dict]: Lista de materiales con su información completa y estado.
+        
+    Cada elemento contiene:
+        - material (str): Nombre del material
+        - unidad (str): Unidad de medida (kg, lt, m3, etc.)
+        - stock_actual (float): Cantidad actual en inventario
+        - stock_minimo (float): Cantidad mínima permitida
+        - estado (str): Estado del material ('critico', 'bajo', 'ok')
+          * 'critico': stock_actual < stock_minimo * 0.5
+          * 'bajo': stock_actual <= stock_minimo
+          * 'ok': stock_actual > stock_minimo
+    """
+    try:
+        materiales = cargar_datos_tabla('materiales')
+        resultado = []
+        
+        for material in materiales:
+            stock_actual = material.get('stock_actual', 0)
+            stock_minimo = material.get('stock_minimo', 0)
+            
+            # Determinar estado del material
+            if stock_actual <= stock_minimo:
+                estado = 'bajo'
+            else:
+                estado = 'ok'
+            
+            # Construir diccionario con la información
+            info_material = {
+                'material': material.get('nombre', ''),
+                'unidad': material.get('unidad', ''),
+                'stock_actual': stock_actual,
+                'stock_minimo': stock_minimo,
+                'estado': estado
+            }
+            
+            resultado.append(info_material)
+        
+        return resultado
+    
+    except Exception as e:
+        print(f"Error al obtener estado de materiales: {e}")
+        return []
+
 def receta_actual(diseno):
     try:
         # Conectar a la base de datos
@@ -274,9 +322,11 @@ def consumos_calculados(diseno, volumen):
 
         receta = receta_actual(diseno)
         materiales = cargar_datos_tabla('materiales')
-        mapeo = mapeo_materiales
+        mapeo = mapeo_materiales()  # Llamar a la función
 
         consumos = []
+        stock_suficiente = True  # Bandera para validar stock
+        alertas = []  # Lista de materiales con stock insuficiente
 
         for cod_material, dosificacion in receta.items():
             nombre_material = mapeo.get(cod_material)
@@ -285,28 +335,84 @@ def consumos_calculados(diseno, volumen):
                 for material in nombre_material:
                     fila_material = next((fila for fila in materiales if fila["nombre"] == material), None)
                     
-                    consumo = {"material": material, "dosificacion": dosificacion, "consumo_total": dosificacion*volumen, 
-                        "unidad": fila_material["unidad"], "stock_actual": fila_material.get("stock_actual", 0),
-                        "saldo":fila_material.get("stock_actual", 0)-(dosificacion*volumen)}
-                    consumos.append(consumo)
+                    if fila_material:
+                        stock_actual = fila_material.get("stock_actual", 0)
+                        stock_minimo = fila_material.get("stock_minimo", 0)
+                        consumo_total = dosificacion * volumen
+                        saldo = stock_actual - consumo_total
+                        
+                        # Validar si el saldo es menor al mínimo
+                        if saldo < stock_minimo:
+                            stock_suficiente = False
+                            alertas.append({
+                                "material": material,
+                                "stock_actual": stock_actual,
+                                "stock_minimo": stock_minimo,
+                                "saldo": saldo,
+                                "consumo_total": consumo_total
+                            })
+                        
+                        consumo = {
+                            "material": material, 
+                            "dosificacion": dosificacion, 
+                            "consumo_total": consumo_total, 
+                            "unidad": fila_material["unidad"], 
+                            "stock_actual": stock_actual,
+                            "stock_minimo": stock_minimo,
+                            "saldo": saldo,
+                            "alerta": saldo < stock_minimo
+                        }
+                        consumos.append(consumo)
             else:
-                fila_material = next((fila for fila in materiales if fila["nombre"] == material), None)
-                consumo = {"material": nombre_material, "dosificacion": dosificacion, "consumo_total": dosificacion*volumen, 
-                        "unidad": fila_material["unidad"], "stock_actual": fila_material.get("stock_actual", 0),
-                        "saldo":fila_material.get("stock_actual", 0)-(dosificacion*volumen)}
-                consumos.append(consumo)
+                fila_material = next((fila for fila in materiales if fila["nombre"] == nombre_material), None)
+                
+                if fila_material:
+                    stock_actual = fila_material.get("stock_actual", 0)
+                    stock_minimo = fila_material.get("stock_minimo", 0)
+                    consumo_total = dosificacion * volumen
+                    saldo = stock_actual - consumo_total
+                    
+                    # Validar si el saldo es menor al mínimo
+                    if saldo < stock_minimo:
+                        stock_suficiente = False
+                        alertas.append({
+                            "material": nombre_material,
+                            "stock_actual": stock_actual,
+                            "stock_minimo": stock_minimo,
+                            "saldo": saldo,
+                            "consumo_total": consumo_total
+                        })
+                    
+                    consumo = {
+                        "material": nombre_material, 
+                        "dosificacion": dosificacion, 
+                        "consumo_total": consumo_total, 
+                        "unidad": fila_material["unidad"], 
+                        "stock_actual": stock_actual,
+                        "stock_minimo": stock_minimo,
+                        "saldo": saldo,
+                        "alerta": saldo < stock_minimo
+                    }
+                    consumos.append(consumo)
         
-        return consumo
+        return {
+            "consumos": consumos,
+            "stock_suficiente": stock_suficiente,
+            "alertas": alertas,
+            "mensaje": "Stock suficiente" if stock_suficiente else f"Stock insuficiente en {len(alertas)} material(es)"
+        }
 
     except sqlite3.Error as e:
         print(f"Error al mostrar consumos calculados: {e}")
         return None
 
 def cambiar_stock(diseno, volumen, usuario_id):
-    consumos = consumos_calculados(diseno, volumen)
-    if not consumos:
+    resultado = consumos_calculados(diseno, volumen)
+    if not resultado or not resultado.get('consumos'):
         print("Error: No se pudieron calcular los consumos")
         return False
+    
+    consumos = resultado['consumos']
     
     try:
         conn = obtener_conexion_autonoma()
