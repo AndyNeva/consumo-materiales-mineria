@@ -539,7 +539,6 @@ def insertar_material(material, stock, unidad, minimo):
 
     try:
         stock = float(stock)
-        minimo = float(minimo)
     except (ValueError, TypeError):
         print("Error: Stock o mínimo deben ser valores numéricos")
         return None

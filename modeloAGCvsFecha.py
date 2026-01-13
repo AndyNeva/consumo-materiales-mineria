@@ -10,9 +10,9 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from xgboost import XGBRegressor
 
-# Cargar el archivo CSV desde el mismo directorio del script
+# Cargar el archivo CSV desde la carpeta data/processed
 BASE_DIR = Path(__file__).resolve().parent
-DATOS = BASE_DIR / "DatosLimpios.csv"
+DATOS = BASE_DIR / "data" / "processed" / "DatosLimpios.csv"
 
 if not DATOS.exists():
     raise FileNotFoundError(f"No se encontró el archivo de datos esperado en {DATOS}")
@@ -162,9 +162,9 @@ with open(MODEL_PATH, 'wb') as file:
 print(f'\n✓ Modelo guardado exitosamente en: {MODEL_PATH}')
 
 # Función para predicciones
-def predecir_agua(arena, grava, cemento):
+def predecir_fecha(arena, grava, cemento):
     """
-    Predice la cantidad de agua necesaria dados los materiales.
+    Predice la fecha (en días desde fecha mínima) dados los materiales.
     
     Args:
         arena (float): Cantidad de arena en kg
@@ -172,7 +172,7 @@ def predecir_agua(arena, grava, cemento):
         cemento (float): Cantidad de cemento en kg
     
     Returns:
-        float: Predicción de agua en kg
+        float: Predicción de fecha en días numéricos
     """
     try:
         # Crear array con los valores de entrada
@@ -202,9 +202,11 @@ ejemplos = [
 ]
 
 for arena, grava, cemento in ejemplos:
-    agua_predicha = predecir_agua(arena, grava, cemento)
-    if agua_predicha is not None:
-        print(f'Arena: {arena} kg, Grava: {grava} kg, Cemento: {cemento} kg → Agua predicha: {agua_predicha:.2f} kg')
+    fecha_predicha = predecir_fecha(arena, grava, cemento)
+    if fecha_predicha is not None:
+        # Convertir días a fecha real
+        fecha_real = fecha_min + pd.Timedelta(days=int(fecha_predicha))
+        print(f'Arena: {arena} kg, Grava: {grava} kg, Cemento: {cemento} kg → Fecha predicha: {fecha_real.strftime("%Y-%m-%d")} (día {fecha_predicha:.0f})')
 
 # Gráfico 1: Valores reales vs predicciones
 plt.figure(figsize=(15, 10))
@@ -218,8 +220,8 @@ for nombre, resultado in resultados.items():
 plt.plot([y_test_original.min(), y_test_original.max()], 
          [y_test_original.min(), y_test_original.max()], 
          'r--', lw=2, label='Predicción perfecta')
-plt.xlabel('Valores Reales (kg)', fontweight='bold')
-plt.ylabel('Predicciones (kg)', fontweight='bold')
+plt.xlabel('Valores Reales (días)', fontweight='bold')
+plt.ylabel('Predicciones (días)', fontweight='bold')
 plt.title('Comparación de Modelos', fontweight='bold')
 plt.legend(fontsize=8)
 plt.grid(True, alpha=0.3)
@@ -230,8 +232,8 @@ plt.scatter(y_test_original, predictions_original, alpha=0.6, edgecolors='k', c=
 plt.plot([y_test_original.min(), y_test_original.max()], 
          [y_test_original.min(), y_test_original.max()], 
          'r--', lw=2, label='Predicción perfecta')
-plt.xlabel('Valores Reales (kg)', fontweight='bold')
-plt.ylabel('Predicciones (kg)', fontweight='bold')
+plt.xlabel('Valores Reales (días)', fontweight='bold')
+plt.ylabel('Predicciones (días)', fontweight='bold')
 plt.title(f'Mejor Modelo: {mejor_nombre}\nR²={mejores_metricas["r2_test"]:.4f}', fontweight='bold')
 plt.legend()
 plt.grid(True, alpha=0.3)
@@ -241,15 +243,15 @@ plt.subplot(2, 3, 3)
 residuos = y_test_original - predictions_original
 plt.scatter(predictions_original, residuos, alpha=0.6, edgecolors='k', c='green')
 plt.axhline(y=0, color='r', linestyle='--', lw=2)
-plt.xlabel('Predicciones (kg)', fontweight='bold')
-plt.ylabel('Residuos (kg)', fontweight='bold')
+plt.xlabel('Predicciones (días)', fontweight='bold')
+plt.ylabel('Residuos (días)', fontweight='bold')
 plt.title('Gráfico de Residuos', fontweight='bold')
 plt.grid(True, alpha=0.3)
 
 # Distribución de residuos
 plt.subplot(2, 3, 4)
 plt.hist(residuos, bins=20, alpha=0.7, color='purple', edgecolor='black')
-plt.xlabel('Residuos (kg)', fontweight='bold')
+plt.xlabel('Residuos (días)', fontweight='bold')
 plt.ylabel('Frecuencia', fontweight='bold')
 plt.title('Distribución de Residuos', fontweight='bold')
 plt.grid(True, alpha=0.3, axis='y')
@@ -277,8 +279,8 @@ plt.grid(True, alpha=0.3, axis='x')
 plt.xlim(0, 1)
 
 plt.tight_layout()
-plt.savefig(BASE_DIR / 'prediccion_agua.png', dpi=300, bbox_inches='tight')
-print(f"\n✓ Gráfico guardado en: {BASE_DIR / 'prediccion_agua.png'}")
+plt.savefig(BASE_DIR / 'prediccion_fecha.png', dpi=300, bbox_inches='tight')
+print(f"\n✓ Gráfico guardado en: {BASE_DIR / 'prediccion_fecha.png'}")
 
 # Gráfico 2: Correlaciones
 plt.figure(figsize=(8, 6))
@@ -288,12 +290,12 @@ for i, feature in enumerate(features):
     correlaciones.append(corr)
 
 plt.barh(features, correlaciones, color=['#1f77b4', '#ff7f0e', '#2ca02c'])
-plt.xlabel('Correlación con Agua', fontweight='bold')
-plt.title('Correlación de Variables con la Cantidad de Agua', fontweight='bold')
+plt.xlabel('Correlación con Fecha', fontweight='bold')
+plt.title('Correlación de Variables con la Fecha', fontweight='bold')
 plt.grid(True, alpha=0.3, axis='x')
 plt.tight_layout()
-plt.savefig(BASE_DIR / 'correlaciones.png', dpi=300, bbox_inches='tight')
-print(f"✓ Gráfico guardado en: {BASE_DIR / 'correlaciones.png'}")
+plt.savefig(BASE_DIR / 'correlaciones_fecha.png', dpi=300, bbox_inches='tight')
+print(f"✓ Gráfico guardado en: {BASE_DIR / 'correlaciones_fecha.png'}")
 
 print(f"\n{'='*50}")
 print(f"✓ Entrenamiento completado exitosamente")

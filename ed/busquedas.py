@@ -44,4 +44,7 @@ def busqueda_diseno_destino(datos:list[dict], diseno=None, destino=None):
         and (destino is None or registro['zona'] == destino)
     ]
 
-buscar_por_rango('2025-11-15', '2025-11-20')
+
+if __name__ == "__main__":
+    # Solo ejecutar búsqueda de prueba si se ejecuta directamente
+    buscar_por_rango('2025-11-15', '2025-11-20')

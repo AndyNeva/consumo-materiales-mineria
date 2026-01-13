@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test API Gráficas</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        #info { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        #grafica { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Prueba API de Gráficas</h1>
+    
+    <div>
+        <button onclick="cargarListaGraficas()">Ver Gráficas Disponibles</button>
+        <button onclick="cargarGrafica('boxplot_materiales')">Boxplot Materiales</button>
+        <button onclick="cargarGrafica('boxplot_aditivos')">Boxplot Aditivos</button>
+    </div>
+    
+    <div id="info"></div>
+    <div id="grafica"></div>
+    
+    <script>
+        const API_BASE = 'http://localhost:5000/api/graficas';
+        
+        async function cargarListaGraficas() {
+            try {
+                const response = await fetch(API_BASE);
+                const data = await response.json();
+                
+                document.getElementById('info').innerHTML = `
+                    <h3>Gráficas Disponibles (${data.total}):</h3>
+                    <ul>
+                        ${data.graficas_disponibles.map(nombre => 
+                            `<li><button onclick="cargarGrafica('${nombre}')">${nombre}</button></li>`
+                        ).join('')}
+                    </ul>
+                `;
+                document.getElementById('grafica').innerHTML = '';
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al cargar lista de gráficas: ' + error.message);
+            }
+        }
+        
+        async function cargarGrafica(nombre) {
+            try {
+                const response = await fetch(`${API_BASE}?chart_name=${nombre}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                
+                // Obtener los datos de plotly
+                const graficaData = data[nombre];
+                
+                // Renderizar con Plotly
+                Plotly.newPlot('grafica', graficaData.data, graficaData.layout, graficaData.config);
+                
+                document.getElementById('info').innerHTML = `<h3>Mostrando: ${nombre}</h3>`;
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al cargar gráfica: ' + error.message);
+            }
+        }
+        
+        // Cargar lista al inicio
+        cargarListaGraficas();
+    </script>
+</body>
+</html>
