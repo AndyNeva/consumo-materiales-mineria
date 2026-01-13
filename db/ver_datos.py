@@ -27,8 +27,11 @@ else:
             print(f"⚠️ Error leyendo {nombre}: {e}")
 
     # Consultamos las tablas principales
+    ver_tabla("usuarios")
     ver_tabla("despachos")
     ver_tabla("movimientos")
     ver_tabla("recetas")
+    ver_tabla("materiales")
+    ver_tabla("daily_demand")   
 
     conn.close()

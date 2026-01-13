@@ -1,220 +1,372 @@
-import sys
 from pathlib import Path
 
-# Agregar el directorio raíz al path de Python
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from utils.loaders import cargar_datos_tabla
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.utils import PlotlyJSONEncoder
 
-# Configurar estilo de gráficos
-sns.set_style("whitegrid")
-plt.rcParams['figure.figsize'] = (12, 6)
-plt.rcParams['font.size'] = 10
+# Cargar el archivo CSV desde el mismo directorio del script
+BASE_DIR = Path(__file__).resolve().parent
+DATOS = BASE_DIR / "DatosLimpios.csv"
 
-def MLdatos():
-    """Carga el dataset de despachos desde la base de datos y lo devuelve como DataFrame"""
-    try:
-        datos = cargar_datos_tabla("despachos")
-        df = pd.DataFrame(datos)
-        return df
-    except Exception as e:
-        print(f"Error al cargar los datos: {e}")
+if not DATOS.exists():
+    raise FileNotFoundError(f"No se encontro el archivo de datos esperado en {DATOS}")
+
+df = pd.read_csv(DATOS)
+
+# Conversión robusta de columnas numéricas
+MATERIALES_COLS = ['Arena (kg)', 'Grava (kg)', 'Cemento (kg)', 'Agua (kg)']
+
+# Definir aditivos antes de usarlos en limpieza
+ADITIVOS_COLS = [
+    'RHEO 1000 (kg)',
+    'BASF 719 (kg)',
+    'Delvo (litros)',
+    'MasterGlenium 7950',
+    'MasterGlenium 7970',
+    'Sika PP 48 (kg)-BARCHIP',
+]
+
+
+def limpiar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Convierte a numéricas las columnas relevantes y elimina filas completamente vacías.
+    No falla si faltan columnas: solo convierte las que existan.
+    """
+    columnas_a_convertir = [c for c in MATERIALES_COLS + ADITIVOS_COLS if c in df.columns]
+    if columnas_a_convertir:
+        df[columnas_a_convertir] = df[columnas_a_convertir].apply(pd.to_numeric, errors='coerce')
+        df = df.dropna(how='all', subset=columnas_a_convertir)
+    return df
+
+
+df = limpiar_dataframe(df)
+
+
+def _output_dir() -> Path:
+    """Directorio de salida para el JSON unificado (ml/graficas)."""
+    out = BASE_DIR / "graficas"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def _fig_to_obj(fig) -> dict:
+    """Convierte figura Plotly a objeto dict (data+layout)."""
+    return fig.to_plotly_json()
+
+
+def _save_single_json(data: dict, filename: str) -> Path:
+    import json
+    path = _output_dir() / filename
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, cls=PlotlyJSONEncoder), encoding="utf-8")
+    return path
+
+
+def generar_resumen_numerico(df: pd.DataFrame) -> dict | None:
+    """Genera resumen numérico (describe) y lo retorna como dict.
+    Retorna None si no hay columnas aplicables.
+    """
+    columnas_todas = [c for c in MATERIALES_COLS + ADITIVOS_COLS if c in df.columns]
+    if not columnas_todas:
         return None
+    resumen = df[columnas_todas].describe().to_dict()
+    return resumen
 
 
-def calculate_statistics(df):
-    """Calcula 10 estadísticos graficables del dataset"""
-    stats = {}
-    
-    # 1. Promedio de volumen por zona
-    stats['volumen_promedio_por_zona'] = df.groupby('zona')['volumen_m3'].mean()
-    
-    # 2. Cantidad de despachos por turno
-    stats['despachos_por_turno'] = df['turno'].value_counts()
-    
-    # 3. Asentamiento promedio por fuente de cemento
-    stats['asentamiento_por_cemento'] = df.groupby('fuente_cemento')['asentamiento_final_cm'].mean()
-    
-    # 4. Humedad de arena promedio por zona
-    stats['humedad_arena_por_zona'] = df.groupby('zona')['arena_humedad_pct'].mean()
-    
-    # 5. Temperatura promedio por turno
-    stats['temperatura_por_turno'] = df.groupby('turno')['temperatura_c'].mean()
-    
-    # 6. Despachos por lote
-    stats['despachos_por_lote'] = df['lote'].value_counts()
-    
-    # 7. Volumen total por diseño de mezcla
-    stats['volumen_total_por_diseno'] = df.groupby('diseno_mezcla')['volumen_m3'].sum()
-    
-    # 8. Asentamiento por diseño de mezcla
-    stats['asentamiento_por_diseno'] = df.groupby('diseno_mezcla')['asentamiento_final_cm'].mean()
-    
-    # 9. Despachos por WBS
-    stats['despachos_por_wbs'] = df['wbs'].value_counts()
-    
-    # 10. Correlación entre volumen y asentamiento
-    stats['correlacion_volumen_asentamiento'] = df['volumen_m3'].corr(df['asentamiento_final_cm'])
-    
-    return stats
+def graficar_boxplot_materiales(df: pd.DataFrame):
+    """Crea boxplot de materiales con Plotly y retorna el objeto figura (dict)."""
+    columnas_presentes = [c for c in MATERIALES_COLS if c in df.columns]
+    if not columnas_presentes:
+        return None
+    df_long = df[columnas_presentes].melt(var_name="Material", value_name="Cantidad")
+    fig = px.box(df_long, x="Material", y="Cantidad", title="Boxplot de materiales (Plotly)")
+    fig.update_layout(xaxis_tickangle=-45)
+    return _fig_to_obj(fig)
 
 
-def plot_statistics(stats):
-    """Genera gráficos en ventanas emergentes para cada estadístico"""
+def graficar_frecuencia_disenos(df: pd.DataFrame):
+    """Crea gráfico de barras de frecuencia de diseños de mezcla y retorna dict."""
+    if 'Diseño de la Mezcla' not in df.columns:
+        return None
+    mix_counts = df['Diseño de la Mezcla'].value_counts().reset_index()
+    mix_counts.columns = ['Diseño', 'Frecuencia']
+    fig = px.bar(mix_counts, x='Diseño', y='Frecuencia', title='Frecuencia de Diseños de Mezcla (Plotly)')
+    fig.update_layout(xaxis_tickangle=-90)
+    return _fig_to_obj(fig)
+
+
+def graficar_matriz_correlacion(df: pd.DataFrame):
+    """Crea heatmap de correlaciones entre materiales/volumen y retorna dict."""
+    heatmap_cols = MATERIALES_COLS + ['Volumen (m3)']
+    presentes = [c for c in heatmap_cols if c in df.columns]
+    if len(presentes) < 2:
+        return None
+    corr = df[presentes].corr(numeric_only=True)
+    fig = px.imshow(corr, text_auto=True, color_continuous_scale='RdBu', origin='lower',
+                    title='Matriz de correlación (Plotly)')
+    return _fig_to_obj(fig)
+
+
+def estadisticos_aditivos(df: pd.DataFrame) -> dict | None:
+    """Genera describe() de aditivos y retorna dict."""
+    presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+    if not presentes:
+        return None
+    desc = df[presentes].describe().to_dict()
+    return desc
+
+
+def graficar_aditivos_boxplot(df: pd.DataFrame):
+    """Crea boxplot de aditivos con Plotly y retorna dict."""
+    presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+    if not presentes:
+        return None
+    df_long = df[presentes].melt(var_name="Aditivo", value_name="Cantidad")
+    fig = px.box(df_long, x="Aditivo", y="Cantidad", title="Boxplot de aditivos (Plotly)")
+    fig.update_layout(xaxis_tickangle=-45)
+    return _fig_to_obj(fig)
+
+
+def graficar_aditivos_histograma(df: pd.DataFrame):
+    """Crea histograma superpuesto de aditivos con Plotly y retorna dict."""
+    presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+    if not presentes:
+        return None
+    fig = go.Figure()
+    for c in presentes:
+        serie = df[c].dropna()
+        fig.add_trace(go.Histogram(x=serie, name=c, opacity=0.6))
+    fig.update_layout(barmode='overlay', title="Histograma de aditivos (Plotly)")
+    fig.update_traces(nbinsx=20)
+    fig.update_xaxes(title_text="Cantidad")
+    fig.update_yaxes(title_text="Frecuencia")
+    return _fig_to_obj(fig)
+
+
+def graficar_aditivos_heatmap(df: pd.DataFrame):
+    """Crea heatmap de correlación de aditivos con Plotly y retorna dict."""
+    presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+    if len(presentes) < 2:
+        return None
+    corr = df[presentes].corr(numeric_only=True)
+    fig = px.imshow(corr, text_auto=True, color_continuous_scale='RdBu', origin='lower',
+                    title='Correlación de aditivos (Plotly)')
+    return _fig_to_obj(fig)
+
+
+def exportar_todo_a_json(filename: str = "graficas.json") -> Path:
+    """Genera todas las salidas (figuras y resúmenes) y guarda TODO en un solo
+    archivo JSON dentro de ml/graficas. Retorna la ruta del archivo.
+    Estructura del JSON:
+    {
+      "boxplot_materiales": {"data": [...], "layout": {...}},
+      "frecuencia_disenos": {"data": [...], "layout": {...}},
+      "matriz_correlacion_materiales": {"data": [...], "layout": {...}},
+      "boxplot_aditivos": {"data": [...], "layout": {...}},
+      "histograma_aditivos": {"data": [...], "layout": {...}},
+      "correlacion_aditivos": {"data": [...], "layout": {...}},
+      "resumen_numerico": {...},
+      "estadisticos_aditivos": {...}
+    }
+    """
+    bundle: dict = {}
+
+    # Figuras Plotly
+    fig_box_mat = graficar_boxplot_materiales(df)
+    if fig_box_mat is not None:
+        bundle['boxplot_materiales'] = fig_box_mat
+
+    fig_freq = graficar_frecuencia_disenos(df)
+    if fig_freq is not None:
+        bundle['frecuencia_disenos'] = fig_freq
+
+    fig_corr_mat = graficar_matriz_correlacion(df)
+    if fig_corr_mat is not None:
+        bundle['matriz_correlacion_materiales'] = fig_corr_mat
+
+    fig_box_adit = graficar_aditivos_boxplot(df)
+    if fig_box_adit is not None:
+        bundle['boxplot_aditivos'] = fig_box_adit
+
+    fig_hist_adit = graficar_aditivos_histograma(df)
+    if fig_hist_adit is not None:
+        bundle['histograma_aditivos'] = fig_hist_adit
+
+    fig_corr_adit = graficar_aditivos_heatmap(df)
+    if fig_corr_adit is not None:
+        bundle['correlacion_aditivos'] = fig_corr_adit
+
+    # Resúmenes numéricos
+    resumen_num = generar_resumen_numerico(df)
+    if resumen_num is not None:
+        bundle['resumen_numerico'] = resumen_num
+
+    desc_adit = estadisticos_aditivos(df)
+    if desc_adit is not None:
+        bundle['estadisticos_aditivos'] = desc_adit
+
+    # Guardar un único archivo
+    return _save_single_json(bundle, filename)
+
+
+# ==========================================
+# APARTADO: GENERACIÓN DE IMÁGENES PNG
+# ==========================================
+
+def _crear_figura_desde_dict(fig_dict):
+    """Reconstruye una figura de Plotly desde un diccionario."""
+    if fig_dict is None:
+        return None
+    return go.Figure(data=fig_dict.get('data', []), layout=fig_dict.get('layout', {}))
+
+
+def generar_imagenes_png():
+    """Genera todas las gráficas como imágenes PNG en la carpeta graficas.
+    Retorna un diccionario con las rutas de los archivos generados.
+    """
+    output_dir = _output_dir()
+    rutas_generadas = {}
     
-    # 1. Gráfico de barras: Volumen promedio por zona (Top 15)
-    plt.figure(figsize=(14, 6))
-    top_zonas = stats['volumen_promedio_por_zona'].nlargest(15)
-    plt.bar(range(len(top_zonas)), top_zonas.values, color='steelblue', alpha=0.7)
-    plt.xticks(range(len(top_zonas)), top_zonas.index, rotation=45, ha='right')
-    plt.xlabel('Zona')
-    plt.ylabel('Volumen Promedio (m³)')
-    plt.title('Top 15 Zonas por Volumen Promedio de Despacho')
-    plt.tight_layout()
-    plt.show()
+    print("Generando imagenes PNG de las graficas...")
+    print(f"Carpeta de destino: {output_dir}")
+    print("-" * 60)
     
-    # 2. Gráfico de pastel: Despachos por turno
-    plt.figure(figsize=(8, 8))
-    colors = ["#c15ed2", "#336393", "#64cd64"]
-    stats['despachos_por_turno'].plot(kind='pie', autopct='%1.1f%%', colors=colors, startangle=90)
-    plt.ylabel('')
-    plt.title('Distribución de Despachos por Turno')
-    plt.tight_layout()
-    plt.show()
+    # 1. Boxplot de materiales
+    try:
+        fig_dict = graficar_boxplot_materiales(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "boxplot_materiales.png"
+            fig.write_image(str(ruta), width=1200, height=600)
+            rutas_generadas['boxplot_materiales'] = str(ruta)
+            print("[OK] boxplot_materiales.png")
+    except Exception as e:
+        print(f"[ERROR] boxplot_materiales: {e}")
     
-    # 3. Gráfico de barras: Asentamiento promedio por fuente de cemento
-    plt.figure(figsize=(10, 6))
-    stats['asentamiento_por_cemento'].plot(kind='bar', color='coral', alpha=0.7)
-    plt.xlabel('Fuente de Cemento')
-    plt.ylabel('Asentamiento Promedio (cm)')
-    plt.title('Asentamiento Promedio por Fuente de Cemento')
-    plt.xticks(rotation=0)
-    plt.tight_layout()
-    plt.show()
+    # 2. Frecuencia de diseños
+    try:
+        fig_dict = graficar_frecuencia_disenos(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "frecuencia_disenos.png"
+            fig.write_image(str(ruta), width=1200, height=600)
+            rutas_generadas['frecuencia_disenos'] = str(ruta)
+            print("[OK] frecuencia_disenos.png")
+    except Exception as e:
+        print(f"[ERROR] frecuencia_disenos: {e}")
     
-    # 4. Gráfico de barras horizontales: Humedad de arena por zona (Top 20)
-    plt.figure(figsize=(10, 8))
-    top_humedad = stats['humedad_arena_por_zona'].nlargest(20)
-    plt.barh(range(len(top_humedad)), top_humedad.values, color='lightgreen', alpha=0.7)
-    plt.yticks(range(len(top_humedad)), top_humedad.index)
-    plt.xlabel('Humedad Promedio (%)')
-    plt.ylabel('Zona')
-    plt.title('Top 20 Zonas por Humedad de Arena Promedio')
-    plt.tight_layout()
-    plt.show()
+    # 3. Matriz de correlación de materiales
+    try:
+        fig_dict = graficar_matriz_correlacion(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "matriz_correlacion_materiales.png"
+            fig.write_image(str(ruta), width=1000, height=800)
+            rutas_generadas['matriz_correlacion_materiales'] = str(ruta)
+            print("[OK] matriz_correlacion_materiales.png")
+    except Exception as e:
+        print(f"[ERROR] matriz_correlacion: {e}")
     
-    # 5. Gráfico de barras: Temperatura promedio por turno
-    plt.figure(figsize=(10, 6))
-    stats['temperatura_por_turno'].plot(kind='bar', color='orange', alpha=0.7)
-    plt.xlabel('Turno')
-    plt.ylabel('Temperatura Promedio (°C)')
-    plt.title('Temperatura Promedio por Turno')
-    plt.xticks(rotation=45)
-    plt.axhline(y=stats['temperatura_por_turno'].mean(), color='r', linestyle='--', 
-                label=f'Media: {stats["temperatura_por_turno"].mean():.2f}°C')
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    # 4. Boxplot de aditivos
+    try:
+        fig_dict = graficar_aditivos_boxplot(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "boxplot_aditivos.png"
+            fig.write_image(str(ruta), width=1200, height=600)
+            rutas_generadas['boxplot_aditivos'] = str(ruta)
+            print("[OK] boxplot_aditivos.png")
+    except Exception as e:
+        print(f"[ERROR] boxplot_aditivos: {e}")
     
-    # 6. Gráfico de barras: Despachos por lote (Top 10)
-    plt.figure(figsize=(12, 6))
-    top_lotes = stats['despachos_por_lote'].head(10)
-    plt.bar(range(len(top_lotes)), top_lotes.values, color='purple', alpha=0.7)
-    plt.xticks(range(len(top_lotes)), top_lotes.index, rotation=45, ha='right')
-    plt.xlabel('Lote')
-    plt.ylabel('Cantidad de Despachos')
-    plt.title('Top 10 Lotes por Cantidad de Despachos')
-    plt.tight_layout()
-    plt.show()
+    # 5. Histograma de aditivos
+    try:
+        fig_dict = graficar_aditivos_histograma(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "histograma_aditivos.png"
+            fig.write_image(str(ruta), width=1200, height=600)
+            rutas_generadas['histograma_aditivos'] = str(ruta)
+            print("[OK] histograma_aditivos.png")
+    except Exception as e:
+        print(f"[ERROR] histograma_aditivos: {e}")
     
-    # 7. Gráfico de barras horizontales: Volumen total por diseño de mezcla (Top 15)
-    plt.figure(figsize=(12, 8))
-    top_disenos = stats['volumen_total_por_diseno'].nlargest(15)
-    plt.barh(range(len(top_disenos)), top_disenos.values, color='teal', alpha=0.7)
-    plt.yticks(range(len(top_disenos)), top_disenos.index)
-    plt.xlabel('Volumen Total (m³)')
-    plt.ylabel('Diseño de Mezcla')
-    plt.title('Top 15 Diseños de Mezcla por Volumen Total')
-    plt.tight_layout()
-    plt.show()
+    # 6. Heatmap de correlación de aditivos
+    try:
+        fig_dict = graficar_aditivos_heatmap(df)
+        if fig_dict:
+            fig = _crear_figura_desde_dict(fig_dict)
+            ruta = output_dir / "correlacion_aditivos.png"
+            fig.write_image(str(ruta), width=1000, height=800)
+            rutas_generadas['correlacion_aditivos'] = str(ruta)
+            print("[OK] correlacion_aditivos.png")
+    except Exception as e:
+        print(f"[ERROR] correlacion_aditivos: {e}")
     
-    # 8. Gráfico de barras: Asentamiento por diseño de mezcla (Top 15)
-    plt.figure(figsize=(14, 6))
-    top_asentamiento = stats['asentamiento_por_diseno'].nlargest(15)
-    plt.bar(range(len(top_asentamiento)), top_asentamiento.values, color='salmon', alpha=0.7)
-    plt.xticks(range(len(top_asentamiento)), top_asentamiento.index, rotation=45, ha='right')
-    plt.xlabel('Diseño de Mezcla')
-    plt.ylabel('Asentamiento Promedio (cm)')
-    plt.title('Top 15 Diseños de Mezcla por Asentamiento Promedio')
-    plt.tight_layout()
-    plt.show()
+    # 7. Tabla de resumen numérico
+    try:
+        columnas_todas = [c for c in MATERIALES_COLS + ADITIVOS_COLS if c in df.columns]
+        if columnas_todas:
+            resumen = df[columnas_todas].describe()
+            fig = go.Figure(data=[go.Table(
+                header=dict(
+                    values=['Estadistico'] + list(resumen.columns),
+                    fill_color='paleturquoise',
+                    align='left',
+                    font=dict(size=12, color='black')
+                ),
+                cells=dict(
+                    values=[resumen.index] + [resumen[col].round(2) for col in resumen.columns],
+                    fill_color='lavender',
+                    align='left',
+                    font=dict(size=11)
+                )
+            )])
+            fig.update_layout(title="Resumen Numerico - Materiales y Aditivos", height=500)
+            ruta = output_dir / "resumen_numerico.png"
+            fig.write_image(str(ruta), width=1400, height=600)
+            rutas_generadas['resumen_numerico'] = str(ruta)
+            print("[OK] resumen_numerico.png")
+    except Exception as e:
+        print(f"[ERROR] resumen_numerico: {e}")
     
-    # 9. Gráfico de barras: Despachos por WBS (Top 10)
-    plt.figure(figsize=(12, 6))
-    top_wbs = stats['despachos_por_wbs'].head(10)
-    plt.bar(range(len(top_wbs)), top_wbs.values, color='navy', alpha=0.7)
-    plt.xticks(range(len(top_wbs)), top_wbs.index, rotation=45, ha='right')
-    plt.xlabel('WBS')
-    plt.ylabel('Cantidad de Despachos')
-    plt.title('Top 10 WBS por Cantidad de Despachos')
-    plt.tight_layout()
-    plt.show()
+    # 8. Tabla de estadísticos de aditivos
+    try:
+        presentes = [c for c in ADITIVOS_COLS if c in df.columns]
+        if presentes:
+            desc = df[presentes].describe()
+            fig = go.Figure(data=[go.Table(
+                header=dict(
+                    values=['Estadistico'] + list(desc.columns),
+                    fill_color='lightcoral',
+                    align='left',
+                    font=dict(size=12, color='black')
+                ),
+                cells=dict(
+                    values=[desc.index] + [desc[col].round(2) for col in desc.columns],
+                    fill_color='mistyrose',
+                    align='left',
+                    font=dict(size=11)
+                )
+            )])
+            fig.update_layout(title="Estadisticos Descriptivos - Aditivos", height=500)
+            ruta = output_dir / "estadisticos_aditivos.png"
+            fig.write_image(str(ruta), width=1400, height=600)
+            rutas_generadas['estadisticos_aditivos'] = str(ruta)
+            print("[OK] estadisticos_aditivos.png")
+    except Exception as e:
+        print(f"[ERROR] estadisticos_aditivos: {e}")
     
-    # 10. Gráfico de texto: Correlación volumen-asentamiento
-    fig, ax = plt.figure(figsize=(8, 6)), plt.gca()
-    corr_value = stats['correlacion_volumen_asentamiento']
+    print("-" * 60)
+    print(f"Proceso completado. Total: {len(rutas_generadas)} imagenes generadas.")
+    print(f"Ubicacion: {output_dir}")
     
-    # Determinar color y descripción basado en el valor de correlación
-    if abs(corr_value) < 0.3:
-        color = 'gray'
-        descripcion = 'Correlación Débil'
-    elif abs(corr_value) < 0.7:
-        color = 'orange'
-        descripcion = 'Correlación Moderada'
-    else:
-        color = 'green'
-        descripcion = 'Correlación Fuerte'
-    
-    ax.text(0.5, 0.6, f'{corr_value:.4f}', 
-            ha='center', va='center', fontsize=80, color=color, weight='bold')
-    ax.text(0.5, 0.3, descripcion, 
-            ha='center', va='center', fontsize=20, color=color)
-    ax.text(0.5, 0.15, 'Correlación entre Volumen y Asentamiento', 
-            ha='center', va='center', fontsize=14, style='italic')
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.axis('off')
-    plt.title('Correlación Volumen (m³) vs Asentamiento (cm)', fontsize=16, pad=20)
-    plt.tight_layout()
-    plt.show()
-    
-    print("\n Todas las gráficas han sido generadas y mostradas")
+    return rutas_generadas
 
 
 if __name__ == "__main__":
-    df = MLdatos()
-    if df is not None:
-        print("Primeras filas del dataset:")
-        print(df.head())
-        print("\nInformación del dataset:")
-        print(df.info())
-        print("\nEstadísticas descriptivas:")
-        print(df.describe())
-        
-        print("\n" + "="*50)
-        print("ESTADÍSTICOS CALCULADOS")
-        print("="*50)
-        
-        stats = calculate_statistics(df)
-        for nombre, valor in stats.items():
-            print(f"\n{nombre}:")
-            print(valor)
-        
-        # Preguntar si desea ver las gráficas
-        respuesta = input("¿Desea ver las gráficas en ventanas emergentes? (s/n): ").strip().lower()
-        if respuesta in ['s', 'si', 'sí', 'yes', 'y']:
-            print("\n Generando gráficas...")
-            plot_statistics(stats)
+    # Si se llama directamente (poco común en esta app), exporta todo.
+    exportar_todo_a_json()
+    
+    # Generar imágenes PNG para verificación visual
+    print("\n" + "=" * 60)
+    generar_imagenes_png()

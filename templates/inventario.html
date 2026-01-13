@@ -1,557 +1,163 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Inventario | Planta de Hormigón</title>
-  <style>
-    :root{
-      --bg:#0b1220;
-      --surface:#0f1a2e;
-      --surface2:#0c1628;
-      --card:#101f37;
-      --border:rgba(255,255,255,.08);
-      --muted:rgba(255,255,255,.72);
-      --text:rgba(255,255,255,.92);
-      --accent:#4f8cff;
-      --accent2:#79a7ff;
-      --good:#22c55e;
-      --warn:#f59e0b;
-      --bad:#ef4444;
-      --shadow: 0 10px 30px rgba(0,0,0,.35);
-      --radius:16px;
-      --radius2:22px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-    }
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; }
-    body{
-      margin:0;
-      font-family: var(--sans);
-      color: var(--text);
-      background:
-        radial-gradient(1200px 600px at 15% 10%, rgba(79,140,255,.25), transparent 60%),
-        radial-gradient(900px 500px at 85% 20%, rgba(121,167,255,.18), transparent 55%),
-        radial-gradient(900px 600px at 55% 95%, rgba(34,197,94,.10), transparent 60%),
-        linear-gradient(180deg, var(--bg), #070b14 70%);
-      letter-spacing:.2px;
-    }
-    a{ color:inherit; text-decoration:none; }
-    .app{
-      min-height:100%;
-      display:grid;
-      grid-template-columns: 280px 1fr;
-    }
-    .sidebar{
-      padding:22px 18px;
-      background: linear-gradient(180deg, rgba(15,26,46,.95), rgba(12,22,40,.88));
-      border-right: 1px solid var(--border);
-      position: sticky;
-      top:0;
-      height:100vh;
-    }
-    .brand{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      padding:10px 10px 16px 10px;
-      border-bottom:1px solid var(--border);
-      margin-bottom:16px;
-    }
-    .logo{
-      width:38px;height:38px;border-radius:12px;
-      background: radial-gradient(circle at 30% 30%, rgba(121,167,255,.85), rgba(79,140,255,.55) 45%, rgba(34,197,94,.25));
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.10);
-    }
-    .brand h1{
-      margin:0;
-      font-size:14px;
-      font-weight:650;
-      line-height:1.2;
-    }
-    .brand small{
-      display:block;
-      margin-top:3px;
-      font-size:12px;
-      color: var(--muted);
-      font-weight:500;
-    }
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Inventario | Planta de Hormigón</title>
 
-    .nav{
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      margin-top:14px;
-    }
-    .nav a{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding:10px 12px;
-      border-radius:14px;
-      border:1px solid transparent;
-      color:rgba(255,255,255,.86);
-      background:transparent;
-      transition: transform .12s ease, background .12s ease, border-color .12s ease;
-    }
-    .nav a:hover{
-      background: rgba(255,255,255,.04);
-      border-color: rgba(255,255,255,.08);
-      transform: translateY(-1px);
-    }
-    .nav a.active{
-      background: linear-gradient(180deg, rgba(79,140,255,.18), rgba(79,140,255,.08));
-      border-color: rgba(79,140,255,.35);
-    }
-    .icon{
-      width:18px; height:18px; flex:0 0 18px;
-      opacity:.92;
-    }
-    .spacer{ flex:1; }
-    .userbox{
-      margin-top:18px;
-      padding:14px 12px;
-      border-radius: var(--radius);
-      background: rgba(255,255,255,.03);
-      border:1px solid var(--border);
-    }
-    .userline{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      margin-bottom:10px;
-    }
-    .chip{
-      font-family: var(--mono);
-      font-size:11px;
-      padding:5px 8px;
-      border-radius: 999px;
-      background: rgba(79,140,255,.14);
-      border:1px solid rgba(79,140,255,.25);
-      color: rgba(255,255,255,.90);
-      white-space:nowrap;
-    }
-    .btn{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:10px 12px;
-      border-radius: 14px;
-      background: rgba(255,255,255,.04);
-      border:1px solid var(--border);
-      color: rgba(255,255,255,.92);
-      cursor:pointer;
-      transition: transform .12s ease, background .12s ease, border-color .12s ease;
-      width:100%;
-      justify-content:center;
-      font-weight:600;
-    }
-    .btn:hover{
-      transform: translateY(-1px);
-      background: rgba(255,255,255,.06);
-      border-color: rgba(255,255,255,.12);
-    }
-    .btn.danger{
-      background: rgba(239,68,68,.10);
-      border-color: rgba(239,68,68,.25);
-    }
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  color:#e6edf7;
+  background:
+    radial-gradient(1200px 800px at 20% -10%, #1b3a6b 0%, #0b1220 45%, #050914 100%);
+}
 
-    /* Main */
-    .main{
-      padding:26px 26px 40px 26px;
-    }
-    .topbar{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:18px;
-      margin-bottom:18px;
-    }
-    .title h2{
-      margin:0;
-      font-size:22px;
-      letter-spacing:.2px;
-    }
-    .title p{
-      margin:8px 0 0 0;
-      color: var(--muted);
-      font-size:13px;
-      max-width: 62ch;
-      line-height:1.45;
-    }
-    .actions{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-    }
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:10px 12px;
-      border-radius: 999px;
-      border:1px solid var(--border);
-      background: rgba(255,255,255,.03);
-      font-weight:650;
-      font-size:13px;
-      cursor:pointer;
-      transition: background .12s ease, transform .12s ease, border-color .12s ease;
-      white-space:nowrap;
-    }
-    .pill:hover{
-      transform: translateY(-1px);
-      background: rgba(255,255,255,.05);
-      border-color: rgba(255,255,255,.12);
-    }
+/* ===== LAYOUT ===== */
+.app{
+  display:grid;
+  grid-template-columns:260px 1fr;
+  min-height:100vh;
+}
 
-    .grid{
-      display:grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap:14px;
-      margin-top:14px;
-    }
-    .card{
-      grid-column: span 4;
-      border-radius: var(--radius2);
-      background: linear-gradient(180deg, rgba(16,31,55,.92), rgba(12,22,40,.92));
-      border:1px solid var(--border);
-      box-shadow: var(--shadow);
-      padding:16px 16px 14px 16px;
-      overflow:hidden;
-      position:relative;
-    }
-    .card::after{
-      content:"";
-      position:absolute;
-      inset:-1px;
-      background: radial-gradient(800px 220px at 20% 0%, rgba(79,140,255,.12), transparent 60%);
-      pointer-events:none;
-    }
-    .card h3{
-      margin:0 0 10px 0;
-      font-size:13px;
-      color: rgba(255,255,255,.86);
-      font-weight:650;
-      letter-spacing:.2px;
-      position:relative;
-    }
-    .kpi{
-      display:flex;
-      align-items:baseline;
-      justify-content:space-between;
-      gap:12px;
-      position:relative;
-    }
-    .kpi .value{
-      font-size:28px;
-      font-weight:750;
-      letter-spacing:.2px;
-    }
-    .kpi .sub{
-      font-size:12px;
-      color: var(--muted);
-      margin-top:6px;
-      line-height:1.35;
-    }
-    .trend{
-      font-family: var(--mono);
-      font-size:12px;
-      padding:6px 10px;
-      border-radius: 999px;
-      border:1px solid var(--border);
-      background: rgba(255,255,255,.03);
-      color: rgba(255,255,255,.88);
-      white-space:nowrap;
-      position:relative;
-    }
-    .trend.good{ border-color: rgba(34,197,94,.30); background: rgba(34,197,94,.10); }
-    .trend.warn{ border-color: rgba(245,158,11,.30); background: rgba(245,158,11,.10); }
-    .trend.bad{ border-color: rgba(239,68,68,.30); background: rgba(239,68,68,.10); }
-
-    .wide{
-      grid-column: span 8;
-      padding:16px;
-    }
-    .panel{
-      border-radius: var(--radius2);
-      background: rgba(255,255,255,.03);
-      border:1px solid var(--border);
-      padding:14px;
-      position:relative;
-      overflow:hidden;
-    }
-    .panel h4{
-      margin:0 0 12px 0;
-      font-size:13px;
-      font-weight:700;
-      color: rgba(255,255,255,.88);
-      letter-spacing:.2px;
-    }
-    .table{
-      width:100%;
-      border-collapse: collapse;
-      font-size:13px;
-    }
-    .table th, .table td{
-      padding:10px 10px;
-      border-bottom:1px solid rgba(255,255,255,.06);
-      text-align:left;
-      vertical-align:top;
-    }
-    .table th{
-      color: rgba(255,255,255,.72);
-      font-weight:650;
-      font-size:12px;
-      letter-spacing:.2px;
-    }
-    .badge{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      background: rgba(255,255,255,.03);
-      font-size:12px;
-      font-family: var(--mono);
-    }
-    .dot{
-      width:8px;height:8px;border-radius:99px;
-      background: rgba(255,255,255,.35);
-      box-shadow: 0 0 0 2px rgba(255,255,255,.08);
-    }
-    .dot.good{ background: var(--good); }
-    .dot.warn{ background: var(--warn); }
-    .dot.bad{ background: var(--bad); }
-
-    .toast{
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      max-width: 360px;
-      display:none;
-      z-index: 9999;
-    }
-    .toast .inner{
-      padding:12px 12px;
-      border-radius: 16px;
-      background: rgba(15,26,46,.95);
-      border:1px solid var(--border);
-      box-shadow: var(--shadow);
-      display:flex;
-      gap:10px;
-      align-items:flex-start;
-    }
-    .toast .inner b{ display:block; margin-bottom:4px; }
-    .toast .inner p{ margin:0; color: var(--muted); font-size:13px; line-height:1.35; }
-
-    @media (max-width: 980px){
-      .app{ grid-template-columns: 1fr; }
-      .sidebar{ position:relative; height:auto; }
-      .grid{ grid-template-columns: repeat(6, 1fr); }
-      .card{ grid-column: span 3; }
-      .wide{ grid-column: span 6; }
-    }
-    @media (max-width: 620px){
-      .grid{ grid-template-columns: repeat(2, 1fr); }
-      .card{ grid-column: span 2; }
-      .wide{ grid-column: span 2; }
-      .actions{ justify-content:flex-start; }
-    }
-  
-
-
-.page{padding: 18px;}
-.row{display:flex; gap:12px; flex-wrap:wrap;}
-.field{display:flex; flex-direction:column; gap:6px; min-width:220px; flex:1;}
-label{font-size:12px;color:var(--muted);}
-input, select, textarea{
+/* ===== SIDEBAR ===== */
+aside{
+  padding:20px;
+  background:linear-gradient(180deg,rgba(20,33,61,.95),rgba(8,14,30,.95));
+  display:flex;
+  flex-direction:column;
+}
+.brand{
+  font-weight:600;
+  margin-bottom:4px;
+}
+.brand-sub{
+  opacity:.7;
+  font-size:14px;
+  margin-bottom:18px;
+}
+.nav a{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 14px;
+  margin-bottom:6px;
+  border-radius:12px;
+  color:#e6edf7;
+  text-decoration:none;
+  background:rgba(255,255,255,.02);
+}
+.nav a.active{
+  background:linear-gradient(90deg,#1f3b6d,#162a4f);
+}
+.nav a:hover{
+  background:rgba(255,255,255,.06);
+}
+.logout{
+  margin-top:auto;
+}
+.logout button{
   width:100%;
-  border:1px solid var(--border);
-  background: rgba(255,255,255,.04);
-  color: var(--text);
-  border-radius: 14px;
-  padding: 10px 12px;
-  outline:none;
-  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  padding:10px;
+  border-radius:14px;
+  border:0;
+  background:#7f1d1d;
+  color:#fff;
+  cursor:pointer;
 }
-input::placeholder, textarea::placeholder{color: rgba(255,255,255,.45);}
-input:focus, select:focus, textarea:focus{
-  border-color: rgba(79,140,255,.45);
-  box-shadow: 0 0 0 4px rgba(79,140,255,.18);
-  background: rgba(255,255,255,.06);
+.logout button:hover{background:#991b1b}
+
+/* ===== MAIN ===== */
+main{
+  padding:24px 28px;
 }
-.table-wrap{
-  overflow:auto;
-  border:1px solid var(--border);
-  border-radius: var(--radius2);
-  background: rgba(255,255,255,.03);
-  box-shadow: var(--shadow);
+h1{margin:0 0 6px}
+.subtitle{opacity:.7;margin-bottom:18px}
+
+.card{
+  background:linear-gradient(180deg,rgba(20,33,61,.85),rgba(10,18,35,.85));
+  border-radius:18px;
+  padding:14px;
 }
-table{width:100%; border-collapse:collapse; min-width: 820px;}
+
+/* ===== TABLE ===== */
+table{
+  width:100%;
+  border-collapse:collapse;
+}
 thead th{
-  position:sticky; top:0; z-index:1;
   text-align:left;
-  font-size:12px;
-  color: var(--muted);
-  background: rgba(255,255,255,.04);
-  border-bottom:1px solid var(--border);
-  padding: 12px 14px;
+  padding:12px;
+  background:linear-gradient(180deg,rgba(40,64,110,.9),rgba(28,46,86,.9));
 }
 tbody td{
-  padding: 12px 14px;
-  border-bottom:1px solid var(--border);
-  vertical-align:top;
-  font-size: 14px;
+  padding:12px;
+  border-top:1px solid rgba(255,255,255,.08);
 }
-tbody tr:hover{ background: rgba(79,140,255,.06); }
+tbody tr:nth-child(even){
+  background:rgba(10,18,35,.6);
+}
+
+/* ===== BADGES ===== */
 .badge{
-  display:inline-flex; align-items:center; gap:8px;
-  font-size: 12px; font-weight: 700;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border:1px solid var(--border);
-  background: rgba(255,255,255,.03);
-  white-space:nowrap;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  display:inline-block;
 }
-.badge.ok{ border-color: rgba(34,197,94,.35); color: rgba(34,197,94,.95); background: rgba(34,197,94,.08); }
-.badge.low{ border-color: rgba(245,158,11,.35); color: rgba(245,158,11,.95); background: rgba(245,158,11,.10); }
-.badge.critical{ border-color: rgba(239,68,68,.35); color: rgba(239,68,68,.95); background: rgba(239,68,68,.10); }
-
-.alert{
-  border:1px solid var(--border);
-  border-left: 6px solid var(--accent);
-  background: rgba(255,255,255,.03);
-  border-radius: var(--radius2);
-  padding: 12px 14px;
-  box-shadow: var(--shadow);
-  color: var(--text);
-  font-size: 13px;
+.ok{
+  background:rgba(34,197,94,.18);
+  color:#4ade80;
 }
-.alert.good{ border-left-color: var(--good); }
-.alert.warn{ border-left-color: var(--warn); }
-.alert.bad{ border-left-color: var(--bad); }
-
-/* FIX visibilidad dropdown */
-select option {
-  background: #0f1a2e;
-  color: #ffffff;
+.low{
+  background:rgba(245,158,11,.18);
+  color:#f59e0b;
 }
 
-.modal-body .row {
-  margin-bottom: 16px;
+/* ===== BUTTON ===== */
+.btn{
+  background:#1f3b6d;
+  color:#fff;
+  border:0;
+  padding:6px 14px;
+  border-radius:12px;
+  cursor:pointer;
 }
+.btn:hover{background:#2a4c88}
 </style>
-
 </head>
+
 <body>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
-        <div>
-          <h1>Planta de Hormigón</h1>
-          <small>Control de producción & inventario</small>
-        </div>
-      </div>
+<div class="app">
 
-      <nav class="nav" aria-label="Navegación">
-        <a class="active" href="dashboard.html" aria-current="page">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M3 13.5V21h7v-7.5H3Z" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M14 3v9h7V3h-7Z" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M14 14.5V21h7v-6.5h-7Z" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M3 3v8h7V3H3Z" stroke="currentColor" stroke-width="1.8"/>
-          </svg>
-          Dashboard
-        </a>
-        <a href="registro.html">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M7 4h10a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2V6a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M9 9h8M9 13h8M9 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-          Registro diario
-        </a>
-        <a href="inventario.html">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M21 8l-9-5-9 5 9 5 9-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-            <path d="M3 8v10l9 5 9-5V8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-            <path d="M12 13v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-          Inventario
-        </a>
-        <a href="historial.html">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M7 6h14M7 12h14M7 18h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            <path d="M3.5 6h.5M3.5 12h.5M3.5 18h.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-          </svg>
-          Historial
-        </a>
-      </nav>
+<!-- ===== SIDEBAR ===== -->
+<aside>
+  <div class="brand">Planta de Hormigón</div>
+  <div class="brand-sub">Control de producción & inventario</div>
 
-      <div class="spacer"></div>
+  <nav class="nav">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="registro.html">Registro diario</a>
+    <a href="inventario.html" class="active">Inventario</a>
+    <a href="historial.html">Historial</a>
+  </nav>
 
-      <div class="userbox">
-        <div class="userline">
-          <div>
-            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Sesión</div>
-            <div id="lblUser" class="chip">Sin usuario</div>
-          </div>
-          <div class="chip" id="todayChip">—</div>
-        </div>
-        <button class="btn danger" id="btnLogout" type="button">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M10 7V6a2 2 0 0 1 2-2h7v16h-7a2 2 0 0 1-2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            <path d="M14 12H4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            <path d="M7 9l-3 3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Cerrar sesión
-        </button>
-      </div>
-    </aside>
-    <main class="main">
-      <div class="topbar">
-        <button class="menu" id="btnToggleNav" type="button" aria-label="Abrir menú">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-        </button>
-        <div class="title">
-          <h2>Inventario</h2>
-          <p>Administra existencias, mínimos y ajustes. (Datos en almacenamiento local del navegador).</p>
-        </div>
-        <div class="actions">
-<a class="pill" href="registro.html" title="Registrar producción">
-  <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-  </svg>
-  Nuevo registro
-</a>
-<a class="pill" href="historial.html" title="Ver historial">
-  <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path d="M12 8v5l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M21 12a9 9 0 1 1-3.1-6.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-    <path d="M21 3v6h-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>
-  Historial
-</a>
-</div>
-      </div>
+  <div class="logout">
+    <button>Cerrar sesión</button>
+  </div>
+</aside>
 
-      <div class="page">
-        <div class="card">
-  <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:12px;">
-    <div style="color:var(--muted); font-size:13px;">
-      Administra materiales, mínimos y stocks. El estado cambia automáticamente.
-    </div>
-    
+<!-- ===== MAIN ===== -->
+<main>
+  <h1>Inventario</h1>
+  <div class="subtitle">
+    Administra materiales, mínimos y stocks. El estado cambia automáticamente.
   </div>
 
-  <div class="table-wrap">
-    <table aria-label="Tabla de inventario">
+  <div class="card">
+    <table>
       <thead>
         <tr>
           <th>Material</th>
@@ -562,271 +168,70 @@ select option {
           <th>Acciones</th>
         </tr>
       </thead>
-      <tbody id="invBody"></tbody>
+      <tbody id="tbody"></tbody>
     </table>
   </div>
+</main>
+
 </div>
 
-<div id="modalInv" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalInvTitle">
-  <div class="modal-card">
-    <div class="modal-head">
-      <h3 id="modalInvTitle">Agregar material</h3>
-      
-    </div>
-    <div class="modal-body">
-      <div class="row">
-        <div class="field">
-          <label for="mMaterial">Material</label>
-          <select id="mMaterial">
-  <option value="">Seleccione un material</option>
-  <option value="RHEO 1000">RHEO 1000</option>
-  <option value="Sika 115">Sika 115</option>
-  <option value="BASF 719">BASF 719</option>
-  <option value="Sika 200">Sika 200</option>
-  <option value="Delvo">Delvo</option>
-  <option value="MasterGlenium 7950">MasterGlenium 7950</option>
-  <option value="MasterGlenium 7970">MasterGlenium 7970</option>
-  <option value="Sika PP 48 - BARCHIP">Sika PP 48 - BARCHIP</option>
-  <option value="Cemento">Cemento</option>
-  <option value="Agua">Agua</option>
-  <option value="Arena">Arena</option>
-  <option value="Grava">Grava</option>
-</select>
-        </div>
-        <div class="field">
-          <label for="mUnidad">Unidad</label>
-          <select id="mUnidad">
-            <option value="kg">kg</option>
-            <option value="m³">m³</option>
-            <option value="lt">lt</option>
-          </select>
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label for="mStock">Stock</label>
-          <input id="mStock" type="number" step="0.01" min="0" placeholder="Ej: 500" />
-        </div>
-        <div class="field">
-          <label for="mMin">Mínimo</label>
-          <input id="mMin" type="number" step="0.01" min="0" placeholder="Ej: 100" />
-        </div>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn secondary" id="modalInvCancel" type="button">Cancelar</button>
-      <button class="btn" id="modalInvSave" type="button">Guardar</button>
-    </div>
-  </div>
-</div>
-      </div>
-    </main>
-  </div>
-  
 <script>
-(function(){
-  const file = (location.pathname.split("/").pop() || "dashboard.html").toLowerCase();
-  document.querySelectorAll('.nav a').forEach(a=>{
-    const href = (a.getAttribute("href")||"").toLowerCase();
-    if(href === file) a.classList.add("active");
-  });
-  const btn = document.getElementById("btnToggleNav");
-  if(btn){
-    btn.addEventListener("click", ()=>{
-      const sb = document.querySelector(".sidebar");
-      if(sb) sb.classList.toggle("open");
-    });
-  }
-})();
-</script>
+/* ===== INVENTARIO PRECARGADO ===== */
+const KEY = "ph_inventario";
 
-  <script>
+const PRELOAD = [
+ {material:"RHEO 1000",unidad:"kg",stock:981.64,minimo:500},
+ {material:"Sika 115",unidad:"kg",stock:800,minimo:300},
+ {material:"BASF 719",unidad:"kg",stock:582.64,minimo:250},
+ {material:"Sika 200",unidad:"kg",stock:700,minimo:300},
+ {material:"Delvo",unidad:"litros",stock:112.82,minimo:50},
+ {material:"MasterGlenium 7950",unidad:"kg",stock:381.02,minimo:150},
+ {material:"MasterGlenium 7970",unidad:"kg",stock:400,minimo:150},
+ {material:"Sika PP 48 - BARCHIP",unidad:"kg",stock:200,minimo:80},
+ {material:"Cemento",unidad:"kg",stock:1823,minimo:10000},
+ {material:"Agua",unidad:"kg",stock:999999548.56,minimo:100},
+ {material:"Arena",unidad:"kg",stock:13108,minimo:1600},
+ {material:"Grava",unidad:"kg",stock:8200,minimo:820},
+ {material:"Sika PP 48-BARCHIP",unidad:"kg",stock:9990,minimo:500}
+];
 
-const LS_INV = "ph_inventario";
-const LS_REG = "ph_registros";
-const LS_USER = "ph_user";
+let data = JSON.parse(localStorage.getItem(KEY)) || PRELOAD;
+localStorage.setItem(KEY, JSON.stringify(data));
 
-let inventario = [];
-let registros = [];
-
-function uid(){ return Math.random().toString(16).slice(2) + Date.now().toString(16); }
-function safeNum(v){ const n = Number(v); return Number.isFinite(n) ? n : NaN; }
-function fmt(n){ if(!Number.isFinite(n)) return "0"; const isInt = Math.abs(n - Math.round(n)) < 1e-9; return isInt ? String(Math.round(n)) : String(n.toFixed(2)); }
-function todayISO(){ const d = new Date(); const off = d.getTimezoneOffset(); const local = new Date(d.getTime() - off*60*1000); return local.toISOString().slice(0,10); }
-function escapeHtml(s){ return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
-
-function toast(type, title, msg, ms=3500){
-  const wrap = document.getElementById("toasts");
-  const el = document.createElement("div");
-  el.className = "toast " + (type || "");
-  el.innerHTML = `
-    <div style="min-width:0">
-      <p class="t-title">${escapeHtml(title || "Aviso")}</p>
-      <p class="t-msg">${escapeHtml(msg || "")}</p>
-    </div>
-    
-  `;
-  el.querySelector(".x").addEventListener("click", () => el.remove());
-  wrap.appendChild(el);
-  window.setTimeout(() => { if (el.isConnected) el.remove(); }, ms);
+function estado(it){
+  if(it.stock <= it.minimo) return {t:"Bajo",c:"low"};
+  return {t:"OK",c:"ok"};
 }
 
-function loadData(){
-  const inv = localStorage.getItem(LS_INV);
-  const reg = localStorage.getItem(LS_REG);
-
-  if (!inv){
-    inventario = [
-      { material: "RHEO 1000", unidad: "kg", stock: 1000, minimo: 500 },
-      { material: "Sika 115", unidad: "kg", stock: 800, minimo: 300 },
-      { material: "BASF 719", unidad: "kg", stock: 600, minimo: 250 },
-      { material: "Sika 200", unidad: "kg", stock: 600, minimo: 250 },
-      { material: "Delvo", unidad: "lt", stock: 200, minimo: 50 },
-      { material: "MasterGlenium 7950", unidad: "lt", stock: 300, minimo: 80 },
-      { material: "MasterGlenium 7970", unidad: "lt", stock: 300, minimo: 80 },
-      { material: "Sika PP 48-BARCHIP", unidad: "kg", stock: 120, minimo: 30 }
-    ];
-    localStorage.setItem(LS_INV, JSON.stringify(inventario));
-  } else {
-    try{ inventario = JSON.parse(inv) || []; }catch{ inventario = []; }
-  }
-
-  if (!reg){
-    registros = [];
-    localStorage.setItem(LS_REG, JSON.stringify(registros));
-  } else {
-    try{ registros = JSON.parse(reg) || []; }catch{ registros = []; }
-  }
-}
-function saveInventario(){ localStorage.setItem(LS_INV, JSON.stringify(inventario)); }
-function saveRegistros(){ localStorage.setItem(LS_REG, JSON.stringify(registros)); }
-
-function requireAuth(){
-  const u = localStorage.getItem(LS_USER);
-  if (!u){ window.location.href = "login.html"; return null; }
-  try{ return JSON.parse(u); }catch{ return null; }
-}
-function setUserLabel(user){
-  const el = document.getElementById("lblUser");
-  if (el) el.textContent = (user && user.usuario) ? user.usuario : "—";
-}
-function wireLogout(){
-  const b = document.getElementById("btnLogout");
-  if (!b) return;
-  b.addEventListener("click", () => {
-    localStorage.removeItem(LS_USER);
-    window.location.href = "login.html";
+function render(){
+  const tb=document.getElementById("tbody");
+  tb.innerHTML="";
+  data.forEach((it,i)=>{
+    const e=estado(it);
+    tb.innerHTML+=`
+      <tr>
+        <td>${it.material}</td>
+        <td>${it.unidad}</td>
+        <td>${it.stock}</td>
+        <td>${it.minimo}</td>
+        <td><span class="badge ${e.c}">${e.t}</span></td>
+        <td><button class="btn" onclick="edit(${i})">Editar</button></td>
+      </tr>`;
   });
 }
 
-function normName(s){
-  return String(s || "")
-    .normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
-    .replace(/\s+/g," ").trim().toLowerCase();
-}
-function findInvItemByName(name){
-  const n = normName(name);
-  return inventario.find(it => normName(it.material) === n);
-}
-
-</script>
-<script>
-
-(function(){
-  const user = requireAuth();
-  if (!user) return;
-  setUserLabel(user);
-  wireLogout();
-  loadData();
-
-  let editIndex = null;
-
-  function statusOf(it){
-    const s = Number(it.stock), m = Number(it.minimo);
-    if (!Number.isFinite(s) || !Number.isFinite(m)) return {txt:"—", badge:"ok"};
-    if (s <= 0) return {txt:"Agotado", badge:"critical"};
-    if (s <= m) return {txt:"Bajo", badge:"low"};
-    return {txt:"OK", badge:"ok"};
-  }
-
-  function render(){
-    const body = document.getElementById("invBody");
-    body.innerHTML = "";
-    inventario.forEach((it, idx) => {
-      const st = statusOf(it);
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${escapeHtml(it.material||"")}</td>
-        <td>${escapeHtml(it.unidad||"")}</td>
-        <td>${escapeHtml(fmt(Number(it.stock)))}</td>
-        <td>${escapeHtml(fmt(Number(it.minimo)))}</td>
-        <td><span class="badge ${st.badge}">${escapeHtml(st.txt)}</span></td>
-        <td style="white-space:nowrap;">
-          <button class="btn secondary small" data-edit="${idx}" type="button">Editar</button>
-</td>
-      `;
-      body.appendChild(tr);
-    });
-
-    body.querySelectorAll("[data-edit]").forEach(b=>{
-      b.addEventListener("click", () => openModal(Number(b.getAttribute("data-edit"))));
-    });
-    });
-  }
-
-  function openModal(idx){
-    editIndex = Number.isFinite(idx) ? idx : null;
-    const m = document.getElementById("modalInv");
-    const title = document.getElementById("modalInvTitle");
-    const it = (editIndex!==null) ? inventario[editIndex] : {material:"", unidad:"kg", stock:0, minimo:0};
-    title.textContent = (editIndex!==null) ? "Editar material" : "Agregar material";
-    document.getElementById("mMaterial").value = it.material || "";
-    document.getElementById("mUnidad").value = it.unidad || "kg";
-    document.getElementById("mStock").value = (it.stock ?? "");
-    document.getElementById("mMin").value = (it.minimo ?? "");
-    m.classList.add("open");
-  }
-  function closeModal(){
-    document.getElementById("modalInv").classList.remove("open");
-    editIndex = null;
-  }
-
-  document.getElementById("btnAddMaterial").addEventListener("click", () => openModal(null));
-  document.getElementById("modalInvClose").addEventListener("click", closeModal);
-  document.getElementById("modalInvCancel").addEventListener("click", closeModal);
-
-  document.getElementById("modalInvSave").addEventListener("click", () => {
-    const material = document.getElementById("mMaterial").value.trim();
-    const unidad = document.getElementById("mUnidad").value;
-    const stock = safeNum(document.getElementById("mStock").value);
-    const minimo = safeNum(document.getElementById("mMin").value);
-    if (!material){ toast("bad","Falta material","Selecciona un material de la lista."); return; }
-    if (!Number.isFinite(stock) || stock < 0){ toast("bad","Stock inválido","Ingresa un stock válido (≥ 0)."); return; }
-    if (!Number.isFinite(minimo) || minimo < 0){ toast("bad","Mínimo inválido","Ingresa un mínimo válido (≥ 0)."); return; }
-
-    const obj = {material, unidad, stock, minimo};
-    if (editIndex===null){
-      const exists = inventario.some(it => normName(it.material) === normName(material));
-      if (exists){ toast("warn","Material duplicado","Ese material ya existe en el inventario. Usa Editar."); return; }
-    }
-    if (editIndex!==null){
-      inventario[editIndex] = obj;
-    } else {
-      inventario.push(obj);
-    }
-    saveInventario();
+function edit(i){
+  const s=prompt("Nuevo stock:",data[i].stock);
+  const m=prompt("Nuevo mínimo:",data[i].minimo);
+  if(s!==null && m!==null){
+    data[i].stock=Number(s);
+    data[i].minimo=Number(m);
+    localStorage.setItem(KEY,JSON.stringify(data));
     render();
-    closeModal();
-    toast("good","Guardado","Inventario actualizado.");
-  });
+  }
+}
 
-  document.getElementById("modalInv").addEventListener("click", (e)=>{
-    if (e.target.id === "modalInv") closeModal();
-  });
-
-  render();
-})();
-
+render();
 </script>
 </body>
 </html>
