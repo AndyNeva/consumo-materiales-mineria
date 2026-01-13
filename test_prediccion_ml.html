@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predicción de Materiales - ML</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #2c3e50; margin-top: 0; }
+        h2 { color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        
+        .form-group { 
+            margin: 15px 0; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-weight: bold;
+            color: #555;
+        }
+        input, select { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        button { 
+            background: #3498db; 
+            color: white; 
+            padding: 12px 30px; 
+            border: none; 
+            cursor: pointer; 
+            border-radius: 5px;
+            font-size: 16px;
+            margin: 10px 5px 10px 0;
+        }
+        button:hover { background: #2980b9; }
+        button:disabled { background: #95a5a6; cursor: not-allowed; }
+        button.secondary { background: #95a5a6; }
+        button.secondary:hover { background: #7f8c8d; }
+        
+        .info-box {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .info-box h3 { margin-top: 0; color: #34495e; }
+        .info-box p { margin: 5px 0; }
+        
+        .resultado {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .resultado h3 { 
+            margin-top: 0; 
+            color: #155724;
+        }
+        .resultado-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .material-card {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            border-left: 4px solid #28a745;
+        }
+        .material-card h4 {
+            margin: 0 0 10px 0;
+            color: #155724;
+        }
+        .material-card .cantidad {
+            font-size: 24px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .material-card .unidad {
+            color: #6c757d;
+            font-size: 14px;
+        }
+        
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #3498db;
+        }
+        
+        .metricas {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .metrica {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #3498db;
+        }
+        .metrica-label {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        .metrica-valor {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔮 Predicción de Materiales con Machine Learning</h1>
+        
+        <div id="modeloInfo" class="info-box" style="display:none;">
+            <h3>📊 Información del Modelo</h3>
+            <p><strong>Modelo:</strong> <span id="nombreModelo">-</span></p>
+            <p><strong>Entrenamiento:</strong> <span id="rangoFechas">-</span></p>
+            <p><strong>Diseños disponibles:</strong> <span id="disenosDisponibles">-</span></p>
+            <div class="metricas" id="metricas"></div>
+        </div>
+        
+        <h2>Realizar Predicción</h2>
+        
+        <form id="formPrediccion" onsubmit="event.preventDefault(); realizarPrediccion();">
+            <div class="form-group">
+                <label for="fecha">📅 Fecha:</label>
+                <input type="date" id="fecha" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="turno">🕐 Turno:</label>
+                <select id="turno">
+                    <option value="">AMBOS (Día + Noche)</option>
+                    <option value="DIA">Día</option>
+                    <option value="NOCHE">Noche</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="diseno">🏗️ Diseño de Mezcla:</label>
+                <select id="diseno">
+                    <option value="OTROS">OTROS (Genérico)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="volumen">📦 Volumen (m³):</label>
+                <input type="number" id="volumen" value="6.0" step="0.1" min="0.1" required>
+            </div>
+            
+            <button type="submit">🔮 Predecir Materiales</button>
+            <button type="button" class="secondary" onclick="cargarInfoModelo()">ℹ️ Info del Modelo</button>
+        </form>
+        
+        <div id="loading" class="loading" style="display:none;">
+            <p>⏳ Procesando predicción...</p>
+        </div>
+        
+        <div id="error" class="error" style="display:none;"></div>
+        
+        <div id="resultado" class="resultado" style="display:none;">
+            <h3>✅ Predicción Exitosa</h3>
+            <p><strong>Fecha:</strong> <span id="resFecha"></span></p>
+            <p><strong>Turno:</strong> <span id="resTurno"></span></p>
+            <p><strong>Diseño:</strong> <span id="resDiseno"></span></p>
+            <p><strong>Volumen:</strong> <span id="resVolumen"></span> m³</p>
+            
+            <div class="resultado-grid">
+                <div class="material-card">
+                    <h4>🟡 Arena</h4>
+                    <div class="cantidad" id="resArena">-</div>
+                    <div class="unidad">kg</div>
+                </div>
+                <div class="material-card">
+                    <h4>⚫ Grava</h4>
+                    <div class="cantidad" id="resGrava">-</div>
+                    <div class="unidad">kg</div>
+                </div>
+                <div class="material-card">
+                    <h4>⚪ Cemento</h4>
+                    <div class="cantidad" id="resCemento">-</div>
+                    <div class="unidad">kg</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:5000';
+        
+        // Establecer fecha mínima (hoy)
+        document.getElementById('fecha').valueAsDate = new Date();
+        
+        async function cargarInfoModelo() {
+            try {
+                const response = await fetch(`${API_BASE}/api/ml/info`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    mostrarError(data.error + (data.detalle ? ': ' + data.detalle : ''));
+                    return;
+                }
+                
+                // Mostrar información
+                document.getElementById('nombreModelo').textContent = data.modelo;
+                document.getElementById('rangoFechas').textContent = 
+                    `${data.fecha_min_entrenamiento} → ${data.fecha_max_entrenamiento}`;
+                
+                const disenosSelect = document.getElementById('diseno');
+                disenosSelect.innerHTML = '<option value="OTROS">OTROS (Genérico)</option>';
+                
+                if (data.disenos_disponibles) {
+                    data.disenos_disponibles.forEach(d => {
+                        if (d !== 'OTROS') {
+                            const option = document.createElement('option');
+                            option.value = d;
+                            option.textContent = d;
+                            disenosSelect.appendChild(option);
+                        }
+                    });
+                    
+                    document.getElementById('disenosDisponibles').textContent = 
+                        data.disenos_disponibles.slice(0, 5).join(', ') + 
+                        (data.disenos_disponibles.length > 5 ? '...' : '');
+                }
+                
+                // Mostrar métricas
+                const metricasDiv = document.getElementById('metricas');
+                metricasDiv.innerHTML = `
+                    <div class="metrica">
+                        <div class="metrica-label">R² Score</div>
+                        <div class="metrica-valor">${(data.metricas.r2_global * 100).toFixed(1)}%</div>
+                    </div>
+                    <div class="metrica">
+                        <div class="metrica-label">MAE</div>
+                        <div class="metrica-valor">${data.metricas.mae_global.toFixed(1)} kg</div>
+                    </div>
+                    <div class="metrica">
+                        <div class="metrica-label">RMSE</div>
+                        <div class="metrica-valor">${data.metricas.rmse_global.toFixed(1)} kg</div>
+                    </div>
+                `;
+                
+                document.getElementById('modeloInfo').style.display = 'block';
+                
+            } catch (error) {
+                mostrarError('Error al cargar información del modelo: ' + error.message);
+            }
+        }
+        
+        async function realizarPrediccion() {
+            const fecha = document.getElementById('fecha').value;
+            const turno = document.getElementById('turno').value;
+            const diseno = document.getElementById('diseno').value;
+            const volumen = parseFloat(document.getElementById('volumen').value);
+            
+            // Ocultar resultados previos
+            document.getElementById('resultado').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+            
+            try {
+                const body = { fecha, diseno, volumen };
+                // Solo agregar turno si tiene valor
+                if (turno) {
+                    body.turno = turno;
+                }
+                
+                const response = await fetch(`${API_BASE}/api/ml/predecir`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                if (data.error) {
+                    mostrarError(data.error + (data.detalle ? '\n' + data.detalle : ''));
+                    return;
+                }
+                
+                // Mostrar resultado
+                document.getElementById('resFecha').textContent = data.fecha;
+                
+                // Mostrar turno con indicador especial si es AMBOS
+                let turnoTexto = data.turno;
+                if (data.turno === 'AMBOS') {
+                    turnoTexto = '🌞+🌙 AMBOS TURNOS (Suma total)';
+                } else if (data.turno === 'DIA') {
+                    turnoTexto = '🌞 Día';
+                } else if (data.turno === 'NOCHE') {
+                    turnoTexto = '🌙 Noche';
+                }
+                document.getElementById('resTurno').textContent = turnoTexto;
+                
+                document.getElementById('resDiseno').textContent = data.diseno;
+                document.getElementById('resVolumen').textContent = data.volumen_m3.toFixed(1);
+                
+                document.getElementById('resArena').textContent = 
+                    data.prediccion.arena_kg.toLocaleString('es-ES', {minimumFractionDigits: 2});
+                document.getElementById('resGrava').textContent = 
+                    data.prediccion.grava_kg.toLocaleString('es-ES', {minimumFractionDigits: 2});
+                document.getElementById('resCemento').textContent = 
+                    data.prediccion.cemento_kg.toLocaleString('es-ES', {minimumFractionDigits: 2});
+                
+                // Si hay desglose, mostrarlo en consola o en un elemento adicional
+                if (data.desglose) {
+                    console.log('Desglose por turno:', data.desglose);
+                }
+                
+                document.getElementById('resultado').style.display = 'block';
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                mostrarError('Error al realizar la predicción: ' + error.message);
+            }
+        }
+        
+        function mostrarError(mensaje) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = '❌ ' + mensaje;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 8000);
+        }
+        
+        // Cargar info del modelo al inicio
+        window.onload = () => {
+            cargarInfoModelo();
+        };
+    </script>
+</body>
+</html>

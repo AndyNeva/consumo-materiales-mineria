@@ -7,7 +7,7 @@ from plotly.utils import PlotlyJSONEncoder
 
 # Cargar el archivo CSV desde el mismo directorio del script
 BASE_DIR = Path(__file__).resolve().parent
-DATOS = BASE_DIR / "DatosLimpios.csv"
+DATOS = BASE_DIR / ".." / "data" / "processed" / "DatosLimpios.csv"
 
 if not DATOS.exists():
     raise FileNotFoundError(f"No se encontro el archivo de datos esperado en {DATOS}")
@@ -61,15 +61,32 @@ def _save_single_json(data: dict, filename: str) -> Path:
     return path
 
 
-def generar_resumen_numerico(df: pd.DataFrame) -> dict | None:
-    """Genera resumen numérico (describe) y lo retorna como dict.
+def generar_resumen_numerico(df: pd.DataFrame):
+    """Genera resumen numérico como tabla visual de Plotly.
     Retorna None si no hay columnas aplicables.
     """
     columnas_todas = [c for c in MATERIALES_COLS + ADITIVOS_COLS if c in df.columns]
     if not columnas_todas:
         return None
-    resumen = df[columnas_todas].describe().to_dict()
-    return resumen
+    resumen = df[columnas_todas].describe()
+    
+    # Crear tabla visual con Plotly
+    fig = go.Figure(data=[go.Table(
+        header=dict(
+            values=['Estadístico'] + list(resumen.columns),
+            fill_color='paleturquoise',
+            align='left',
+            font=dict(size=12, color='black')
+        ),
+        cells=dict(
+            values=[resumen.index] + [resumen[col].round(2) for col in resumen.columns],
+            fill_color='lavender',
+            align='left',
+            font=dict(size=11)
+        )
+    )])
+    fig.update_layout(title="Resumen Numérico - Materiales y Aditivos", height=500)
+    return _fig_to_obj(fig)
 
 
 def graficar_boxplot_materiales(df: pd.DataFrame):
@@ -101,18 +118,53 @@ def graficar_matriz_correlacion(df: pd.DataFrame):
     if len(presentes) < 2:
         return None
     corr = df[presentes].corr(numeric_only=True)
-    fig = px.imshow(corr, text_auto=True, color_continuous_scale='RdBu', origin='lower',
-                    title='Matriz de correlación (Plotly)')
+    
+    # Usar go.Heatmap en lugar de px.imshow para mejor control
+    # Convertir numpy arrays a listas para serialización correcta
+    fig = go.Figure(data=go.Heatmap(
+        z=corr.values.tolist(),
+        x=corr.columns.tolist(),
+        y=corr.columns.tolist(),
+        colorscale='RdBu',
+        zmid=0,
+        text=corr.values.round(2).tolist(),
+        texttemplate='%{text}',
+        textfont={"size": 10},
+        colorbar=dict(title="Correlación")
+    ))
+    fig.update_layout(
+        title='Matriz de correlación - Materiales y Volumen',
+        xaxis={'side': 'bottom'},
+        width=700,
+        height=600
+    )
     return _fig_to_obj(fig)
 
 
-def estadisticos_aditivos(df: pd.DataFrame) -> dict | None:
-    """Genera describe() de aditivos y retorna dict."""
+def estadisticos_aditivos(df: pd.DataFrame):
+    """Genera estadísticos de aditivos como tabla visual de Plotly."""
     presentes = [c for c in ADITIVOS_COLS if c in df.columns]
     if not presentes:
         return None
-    desc = df[presentes].describe().to_dict()
-    return desc
+    desc = df[presentes].describe()
+    
+    # Crear tabla visual con Plotly
+    fig = go.Figure(data=[go.Table(
+        header=dict(
+            values=['Estadístico'] + list(desc.columns),
+            fill_color='lightcoral',
+            align='left',
+            font=dict(size=12, color='black')
+        ),
+        cells=dict(
+            values=[desc.index] + [desc[col].round(2) for col in desc.columns],
+            fill_color='mistyrose',
+            align='left',
+            font=dict(size=11)
+        )
+    )])
+    fig.update_layout(title="Estadísticos Descriptivos - Aditivos", height=500)
+    return _fig_to_obj(fig)
 
 
 def graficar_aditivos_boxplot(df: pd.DataFrame):
@@ -133,12 +185,17 @@ def graficar_aditivos_histograma(df: pd.DataFrame):
         return None
     fig = go.Figure()
     for c in presentes:
-        serie = df[c].dropna()
-        fig.add_trace(go.Histogram(x=serie, name=c, opacity=0.6))
-    fig.update_layout(barmode='overlay', title="Histograma de aditivos (Plotly)")
-    fig.update_traces(nbinsx=20)
-    fig.update_xaxes(title_text="Cantidad")
-    fig.update_yaxes(title_text="Frecuencia")
+        # Convertir a lista explícitamente para evitar problemas de serialización
+        serie = df[c].dropna().tolist()
+        fig.add_trace(go.Histogram(x=serie, name=c, opacity=0.6, nbinsx=30))
+    fig.update_layout(
+        barmode='overlay', 
+        title="Histograma de aditivos (Plotly)",
+        xaxis_title="Cantidad (kg o litros)",
+        yaxis_title="Frecuencia",
+        height=600,
+        width=1000
+    )
     return _fig_to_obj(fig)
 
 
@@ -148,8 +205,26 @@ def graficar_aditivos_heatmap(df: pd.DataFrame):
     if len(presentes) < 2:
         return None
     corr = df[presentes].corr(numeric_only=True)
-    fig = px.imshow(corr, text_auto=True, color_continuous_scale='RdBu', origin='lower',
-                    title='Correlación de aditivos (Plotly)')
+    
+    # Usar go.Heatmap en lugar de px.imshow para mejor control
+    # Convertir numpy arrays a listas para serialización correcta
+    fig = go.Figure(data=go.Heatmap(
+        z=corr.values.tolist(),
+        x=corr.columns.tolist(),
+        y=corr.columns.tolist(),
+        colorscale='RdBu',
+        zmid=0,
+        text=corr.values.round(2).tolist(),
+        texttemplate='%{text}',
+        textfont={"size": 10},
+        colorbar=dict(title="Correlación")
+    ))
+    fig.update_layout(
+        title='Matriz de correlación - Aditivos',
+        xaxis={'side': 'bottom', 'tickangle': -45},
+        width=800,
+        height=700
+    )
     return _fig_to_obj(fig)
 
 
