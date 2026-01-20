@@ -18,6 +18,8 @@ from utils.loaders import (
 # Si igual quieres usar el motor dinamico, lo dejamos importado:
 from ml.estadisticas_dinamicas import generar_graficos_dinamicos
 
+from ml.predictor import predecir_batch, predecir_materiales, obtener_info_modelo
+
 import pandas as pd
 
 
