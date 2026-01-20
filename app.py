@@ -356,6 +356,129 @@ def api_graficas():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# -------------------
+# APIs de Predicción ML
+# -------------------
+
+@app.route("/api/ml/info")
+def api_ml_info():
+    """
+    Obtiene información sobre el modelo de Machine Learning cargado.
+    
+    Retorna:
+    - Nombre del modelo
+    - Diseños de mezcla disponibles
+    - Rango de fechas de entrenamiento
+    - Métricas de desempeño (R², MAE, RMSE)
+    """
+    try:
+        info = obtener_info_modelo()
+        return jsonify(info)
+    except FileNotFoundError:
+        return jsonify({
+            'error': 'Modelo no encontrado',
+            'detalle': 'Ejecuta primero ml/MLPFuture.py para entrenar el modelo'
+        }), 404
+    except Exception as e:
+        return jsonify({'error': f'Error al cargar modelo: {str(e)}'}), 500
+
+
+@app.route("/api/ml/predecir", methods=["POST"])
+def api_ml_predecir():
+    """
+    Predice las cantidades de materiales necesarios para una fecha futura.
+    
+    Body (JSON):
+    - fecha: Fecha en formato 'YYYY-MM-DD' (requerido)
+    - turno: 'DIA', 'NOCHE', 'AMBOS' o null (opcional, si es null calcula ambos turnos y suma)
+    - diseno: Diseño de mezcla (opcional, default: 'OTROS')
+    - volumen: Volumen en m³ (opcional, default: 6.0)
+    
+    Retorna:
+    - Predicción de Arena (kg), Grava (kg), Cemento (kg)
+    - Si turno=AMBOS o null, incluye desglose por turno
+    """
+    try:
+        data = request.get_json(force=True)
+        
+        fecha = data.get('fecha')
+        if not fecha:
+            return jsonify({'error': 'El campo "fecha" es requerido'}), 400
+        
+        turno = data.get('turno')  # Puede ser None
+        diseno = data.get('diseno', 'OTROS')
+        volumen = data.get('volumen', 6.0)
+        
+        # Validar volumen
+        try:
+            volumen = float(volumen)
+            if volumen <= 0:
+                return jsonify({'error': 'El volumen debe ser mayor a 0'}), 400
+        except (TypeError, ValueError):
+            return jsonify({'error': 'El volumen debe ser un número'}), 400
+        
+        resultado = predecir_materiales(
+            fecha_str=fecha,
+            turno=turno,
+            diseno=diseno,
+            volumen=volumen
+        )
+        
+        return jsonify(resultado)
+        
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except FileNotFoundError:
+        return jsonify({
+            'error': 'Modelo no encontrado',
+            'detalle': 'Ejecuta primero ml/MLPFuture.py para entrenar el modelo'
+        }), 404
+    except Exception as e:
+        return jsonify({'error': f'Error en la predicción: {str(e)}'}), 500
+
+
+@app.route("/api/ml/predecir_batch", methods=["POST"])
+def api_ml_predecir_batch():
+    """
+    Realiza múltiples predicciones en una sola llamada.
+    
+    Body (JSON):
+    - predicciones: Array de objetos con {fecha, turno, diseno, volumen}
+    
+    Ejemplo:
+    {
+      "predicciones": [
+        {"fecha": "2026-03-01", "turno": "DIA", "diseno": "H25", "volumen": 6},
+        {"fecha": "2026-03-02", "turno": "NOCHE", "diseno": "H30", "volumen": 8}
+      ]
+    }
+    
+    Retorna:
+    - Lista de predicciones exitosas
+    - Lista de errores (si hubo)
+    - Contadores de éxito/error
+    """
+    try:
+        data = request.get_json(force=True)
+        
+        predicciones = data.get('predicciones', [])
+        if not predicciones:
+            return jsonify({'error': 'Debes enviar un array de "predicciones"'}), 400
+        
+        if not isinstance(predicciones, list):
+            return jsonify({'error': '"predicciones" debe ser un array'}), 400
+        
+        resultado = predecir_batch(predicciones)
+        return jsonify(resultado)
+        
+    except FileNotFoundError:
+        return jsonify({
+            'error': 'Modelo no encontrado',
+            'detalle': 'Ejecuta primero ml/MLPFuture.py para entrenar el modelo'
+        }), 404
+    except Exception as e:
+        return jsonify({'error': f'Error en predicción batch: {str(e)}'}), 500
+
 # Ejecución del servidor
 if __name__ == "__main__":
     app.run(debug=True)
