@@ -17,7 +17,7 @@ from utils.loaders import (
     obtener_historial_consumo,
 )
 
-# API ML (NO tocar rutas/contratos)
+
 from ml.predictor import predecir_batch, predecir_materiales, obtener_info_modelo
 
 
@@ -29,13 +29,13 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
 app.config["DATABASE"] = DB_PATH
-os.environ["DATABASE"] = DB_PATH  # para que loaders use la misma DB
+os.environ["DATABASE"] = DB_PATH  
 
 logging.basicConfig(level=logging.INFO)
 
 
 # -------------------------------------------------
-# Migración ligera de SQLite (sin romper datos existentes)
+# Migración ligera de SQLite
 # -------------------------------------------------
 def _get_cols(conn, table):
     cur = conn.cursor()
@@ -62,10 +62,10 @@ def ensure_db_schema():
 
     conn = sqlite3.connect(DB_PATH)
     try:
-        # --- DESPACHOS: agregar columnas nuevas (si faltan)
+        # --- DESPACHOS
         cols_d = _get_cols(conn, "despachos")
 
-        # En versiones antiguas existía cemento_kg; ahora usamos cemento_he_kg y cemento_ip_kg
+        
         if "cemento_he_kg" not in cols_d:
             _add_col(
                 conn,
@@ -80,7 +80,7 @@ def ensure_db_schema():
             _add_col(conn, "despachos", "cemento_ip_kg", "REAL", "UPDATE despachos SET cemento_ip_kg = 0")
             logging.info("DB: agregado despachos.cemento_ip_kg")
 
-        # --- RECETAS: agregar columnas nuevas (si faltan)
+        # --- RECETAS
         cols_r = _get_cols(conn, "recetas")
 
         if "cemento_he_kg" not in cols_r:
@@ -97,7 +97,7 @@ def ensure_db_schema():
             _add_col(conn, "recetas", "cemento_ip_kg", "REAL", "UPDATE recetas SET cemento_ip_kg = 0")
             logging.info("DB: agregado recetas.cemento_ip_kg")
 
-        # Campos que tu app espera para mapear aditivos
+        
         if "aditivo_rheo_sika115" not in cols_r:
             _add_col(
                 conn,
@@ -236,7 +236,7 @@ def api_despachos():
 
 
 # -------------------------
-# Historial (lo usa historial.js)
+# Historial
 # -------------------------
 @app.route("/api/historial_consumo")
 def api_historial_consumo():
@@ -414,7 +414,7 @@ def api_graficas():
 
 
 # -------------------
-# APIs de Predicción ML (CONSERVAR)
+# APIs de Predicción ML
 # -------------------
 @app.route("/api/ml/info")
 def api_ml_info():

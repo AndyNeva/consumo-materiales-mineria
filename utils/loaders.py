@@ -34,7 +34,7 @@ def _obtener_receta_por_codigo(conn, codigo_diseno: str):
     """
     Devuelve Row de recetas o None.
 
-    Esquema posible (según tus versiones):
+    Esquema posible:
     - arena_kg, grava_kg, cemento_kg, agua_kg
     - aditivo_a, aditivo_b, delvo_l, glenium_7950, glenium_7970, fibras_kg
     y/o columnas nuevas:
@@ -98,7 +98,7 @@ def registros_ultima_semana():
 
 
 # =========================================================
-# Inserción de despacho (robusto ante columnas antiguas/nuevas)
+# Inserción de despacho
 # =========================================================
 def insertar_despacho(
     fecha: str,
@@ -136,7 +136,7 @@ def insertar_despacho(
         if not receta:
             return None
 
-        # Determinar columnas disponibles en DB
+    
         cols_d = _table_cols(conn, "despachos")
         cols_r = _table_cols(conn, "recetas")
 
@@ -145,7 +145,7 @@ def insertar_despacho(
         grava_m3 = _receta_get(receta, "grava_kg", 0.0)
         agua_m3 = _receta_get(receta, "agua_kg", 0.0)
 
-        # Cementos (nuevo o viejo)
+        # Cementos 
         if "cemento_he_kg" in cols_r:
             cemento_he_m3 = _receta_get(receta, "cemento_he_kg", 0.0)
         else:
@@ -156,9 +156,7 @@ def insertar_despacho(
         else:
             cemento_ip_m3 = 0.0
 
-        # Aditivos (nuevo o viejo)
-        # - Nuevo: aditivo_rheo_sika115 / aditivo_basf_sika200
-        # - Viejo: aditivo_a / aditivo_b
+        # Aditivos 
         if "aditivo_rheo_sika115" in cols_r:
             rheo_sika115_m3 = _receta_get(receta, "aditivo_rheo_sika115", 0.0)
         else:
@@ -169,7 +167,7 @@ def insertar_despacho(
         else:
             basf_sika200_m3 = _receta_get(receta, "aditivo_b", 0.0)
 
-        delvo_m3 = _receta_get(receta, "delvo_l", 0.0)  # (tu DB dice litros)
+        delvo_m3 = _receta_get(receta, "delvo_l", 0.0) 
         g7950_m3 = _receta_get(receta, "glenium_7950", 0.0)
         g7970_m3 = _receta_get(receta, "glenium_7970", 0.0)
         fibras_m3 = _receta_get(receta, "fibras_kg", 0.0)
@@ -189,7 +187,7 @@ def insertar_despacho(
         aditivo_glenium_7970 = volumen * g7970_m3
         aditivo_fibras = volumen * fibras_m3
 
-        # Para esquemas viejos que solo tienen aditivo_kg / cemento_kg
+        
         cemento_kg_viejo = cemento_he_kg + cemento_ip_kg
         aditivo_kg_viejo = (
             aditivo_rheo_sika115
@@ -197,7 +195,7 @@ def insertar_despacho(
             + aditivo_fibras
         )
 
-        # Construir INSERT dinámico según columnas existentes
+        
         data = {
             "fecha": fecha,
             "volumen_m3": volumen,
@@ -213,7 +211,7 @@ def insertar_despacho(
             "agua_kg": agua_kg,
         }
 
-        # Cementos (si existen)
+        # Cementos
         if "cemento_he_kg" in cols_d:
             data["cemento_he_kg"] = cemento_he_kg
         if "cemento_ip_kg" in cols_d:
@@ -221,7 +219,7 @@ def insertar_despacho(
         if "cemento_kg" in cols_d:
             data["cemento_kg"] = cemento_kg_viejo
 
-        # Aditivos (si existen)
+        # Aditivos
         if "aditivo_rheo_sika115" in cols_d:
             data["aditivo_rheo_sika115"] = aditivo_rheo_sika115
         if "aditivo_basf_sika200" in cols_d:
@@ -253,7 +251,7 @@ def insertar_despacho(
 
 
 # =========================================================
-# Historial (devuelve llaves que usa tu front)
+# Historial 
 # =========================================================
 def obtener_historial_consumo(
     inicio: str,
@@ -293,7 +291,7 @@ def obtener_historial_consumo(
             where.append("d.wbs LIKE ?")
             params.append(f"%{wbs}%")
 
-        # Si despachos tiene columnas nuevas, NO recalculamos: leemos directo.
+        
         has_new = all(
             c in cols_d
             for c in [
@@ -359,8 +357,7 @@ def obtener_historial_consumo(
                 })
             return out
 
-        # Si NO hay columnas nuevas en despachos, calculamos con JOIN recetas.
-        # (Esto mantiene compatibilidad con esquemas viejos)
+        
         sql = f"""
             SELECT
                 d.id, d.fecha, d.diseno_mezcla, d.zona, d.wbs, d.turno, d.volumen_m3,
@@ -456,7 +453,7 @@ def obtener_historial_consumo(
 
 
 # =========================================================
-# Resumen por rango (para gráficas/alertas)
+# Resumen por rango 
 # =========================================================
 def cruce_consumo_por_rango(inicio, fin, diseno=None, zona=None, turno=None, wbs=None):
     """
@@ -533,7 +530,7 @@ def cruzar_consumo_vs_stock(resumen_consumo: dict):
 
             mat = MAP[k]
 
-            # columna típica: stock_actual (si tu tabla usa otro nombre, dímelo y lo ajusto)
+            
             cur.execute("SELECT stock_actual FROM materiales WHERE nombre = ?", (mat,))
             r = cur.fetchone()
             if not r:
