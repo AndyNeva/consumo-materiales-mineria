@@ -138,14 +138,15 @@ tbody tr:nth-child(even){
   <div class="brand-sub">Control de producción & inventario</div>
 
   <nav class="nav">
-    <a href="dashboard.html">Dashboard</a>
-    <a href="registro.html">Registro diario</a>
-    <a href="inventario.html" class="active">Inventario</a>
-    <a href="historial.html">Historial</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/registro">Registro diario</a>
+    <a href="/inventario" class="active">Inventario</a>
+    <a href="/historial">Historial</a>
+    <a href="/graficas">Gráficas</a>
   </nav>
 
   <div class="logout">
-    <button>Cerrar sesión</button>
+    <button type="button">Cerrar sesión</button>
   </div>
 </aside>
 
@@ -188,18 +189,18 @@ const PRELOAD = [
  {material:"MasterGlenium 7950",unidad:"kg",stock:381.02,minimo:150},
  {material:"MasterGlenium 7970",unidad:"kg",stock:400,minimo:150},
  {material:"Sika PP 48 - BARCHIP",unidad:"kg",stock:200,minimo:80},
- {material:"Cemento",unidad:"kg",stock:1823,minimo:10000},
+ {material:"Cemento HE",unidad:"kg",stock:1823,minimo:10000},
+ {material:"Cemento IP",unidad:"kg",stock:0,minimo:0},
  {material:"Agua",unidad:"kg",stock:999999548.56,minimo:100},
  {material:"Arena",unidad:"kg",stock:13108,minimo:1600},
- {material:"Grava",unidad:"kg",stock:8200,minimo:820},
- {material:"Sika PP 48-BARCHIP",unidad:"kg",stock:9990,minimo:500}
+ {material:"Grava",unidad:"kg",stock:8200,minimo:820}
 ];
 
 let data = JSON.parse(localStorage.getItem(KEY)) || PRELOAD;
 localStorage.setItem(KEY, JSON.stringify(data));
 
 function estado(it){
-  if(it.stock <= it.minimo) return {t:"Bajo",c:"low"};
+  if(Number(it.stock) <= Number(it.minimo)) return {t:"Bajo",c:"low"};
   return {t:"OK",c:"ok"};
 }
 

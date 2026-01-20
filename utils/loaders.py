@@ -1,141 +1,253 @@
 import os
 import sqlite3
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timedelta, date
 
 
-# -------------------------
-# DB helpers
-# -------------------------
-def _base_dir() -> str:
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-def get_db_path() -> str:
-    """
-    Usa:
-    - ENV DATABASE (opcional)
-    - Si no, db/gestion_materiales.db relativo al proyecto
-    """
-    env = os.environ.get("DATABASE")
-    if env and os.path.exists(env):
-        return env
-
-    default = os.path.join(_base_dir(), "db", "gestion_materiales.db")
-    return default
-
-
-def _connect():
-    conn = sqlite3.connect(get_db_path())
+# -----------------------------
+# Conexion / helpers
+# -----------------------------
+def obtener_conexion_autonoma():
+    db_path = os.environ.get("DATABASE")
+    if not db_path:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(base_dir, "db", "gestion_materiales.db")
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def obtener_columnas_tabla(tabla: str) -> List[str]:
-    conn = _connect()
+def obtener_columnas_tabla(nombre_tabla: str):
+    conn = obtener_conexion_autonoma()
     cur = conn.cursor()
-    cur.execute(f"PRAGMA table_info({tabla})")
-    rows = cur.fetchall()
+    cur.execute(f"PRAGMA table_info({nombre_tabla})")
+    cols = [r["name"] for r in cur.fetchall()]
     conn.close()
-    return [r["name"] for r in rows]
+    return cols
 
 
-# -------------------------
-# Dashboard helpers
-# -------------------------
-def consumo_diario() -> List[Dict[str, Any]]:
+def _safe_float(x):
+    try:
+        return float(x) if x is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _safe_str(x):
+    return (x or "").strip()
+
+
+def _tabla_tiene_columna(tabla: str, col: str) -> bool:
+    try:
+        return col in set(obtener_columnas_tabla(tabla))
+    except Exception:
+        return False
+
+
+# -----------------------------
+# Dashboard
+# -----------------------------
+def consumo_diario():
     """
-    Devuelve consumo/volumen por dia para dashboard.
-    (Si tu dashboard usa otra estructura, ajustamos luego,
-     pero esto te da un resumen estable.)
+    Retorna consumo/produccion del dia actual (segun tabla despachos).
     """
-    conn = _connect()
+    conn = obtener_conexion_autonoma()
     cur = conn.cursor()
+
+    hoy = date.today().isoformat()
+
     cur.execute(
         """
-        SELECT fecha, SUM(COALESCE(volumen_m3,0)) AS volumen_m3
+        SELECT
+            COUNT(*) AS registros,
+            COALESCE(SUM(volumen_m3), 0) AS volumen_m3
         FROM despachos
-        GROUP BY fecha
-        ORDER BY fecha
-        """
+        WHERE fecha = ?
+        """,
+        (hoy,),
     )
-    rows = [dict(r) for r in cur.fetchall()]
+    row = cur.fetchone()
     conn.close()
-    return rows
 
-
-def registros_ultima_semana() -> Tuple[List[Dict[str, Any]], int]:
-    conn = _connect()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT *
-        FROM despachos
-        WHERE fecha >= date('now','-7 day')
-        ORDER BY fecha DESC, id DESC
-        """
-    )
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
-    return rows, len(rows)
-
-
-# -------------------------
-# Insert despacho (REGISTRO)
-# -------------------------
-def insertar_despacho(
-    fecha: str,
-    volumen: float,
-    diseno_mezcla: str,
-    wbs: str = "",
-    destino: str = "",
-    turno: str = "",
-    humedad_arena: float = 0,
-    asentamiento_final: float = 0,
-    temperatura: float = 0,
-    lote: str = "",
-    fuente_cemento: str = "",
-) -> Optional[int]:
-    """
-    Inserta SOLO campos que pertenecen a tabla despachos.
-    NO inserta consumos/recetas (se calculan via JOIN recetas).
-
-    Retorna new_id o None si falla.
-    """
-    conn = _connect()
-    cur = conn.cursor()
-
-    cols = set(obtener_columnas_tabla("despachos"))
-
-    # Campos base que tu app usa
-    payload = {
-        "fecha": fecha,
-        "fuente_cemento": fuente_cemento,
-        "diseno_mezcla": diseno_mezcla,
-        "lote": lote,
-        "zona": destino,
-        "wbs": wbs,
-        "volumen_m3": volumen,
-        "turno": turno,
-        "arena_humedad_pct": humedad_arena,
-        "asentamiento_final_cm": asentamiento_final,
-        "temperatura_c": temperatura,
+    return {
+        "fecha": hoy,
+        "registros": int(row["registros"] or 0),
+        "volumen_m3": _safe_float(row["volumen_m3"]),
     }
 
-    # Filtra solo columnas existentes (para que nunca reviente por "no such column")
-    payload = {k: v for k, v in payload.items() if k in cols}
 
-    if "fecha" not in payload or "diseno_mezcla" not in payload or "volumen_m3" not in payload:
+def registros_ultima_semana():
+    """
+    Lista volumen por dia ultimos 7 dias + total de registros.
+    """
+    conn = obtener_conexion_autonoma()
+    cur = conn.cursor()
+
+    fin = date.today()
+    inicio = fin - timedelta(days=6)
+
+    cur.execute(
+        """
+        SELECT
+            fecha,
+            COUNT(*) AS registros,
+            COALESCE(SUM(volumen_m3), 0) AS volumen_m3
+        FROM despachos
+        WHERE fecha BETWEEN ? AND ?
+        GROUP BY fecha
+        ORDER BY fecha
+        """,
+        (inicio.isoformat(), fin.isoformat()),
+    )
+    rows = cur.fetchall()
+
+    cur.execute(
+        """
+        SELECT COUNT(*) AS total
+        FROM despachos
+        WHERE fecha BETWEEN ? AND ?
+        """,
+        (inicio.isoformat(), fin.isoformat()),
+    )
+    total = cur.fetchone()["total"]
+
+    conn.close()
+
+    data = []
+    for r in rows:
+        data.append(
+            {
+                "fecha": r["fecha"],
+                "registros": int(r["registros"] or 0),
+                "volumen_m3": _safe_float(r["volumen_m3"]),
+            }
+        )
+
+    return data, int(total or 0)
+
+
+# -----------------------------
+# Insertar despacho (registro diario)
+# -----------------------------
+def insertar_despacho(
+    fecha,
+    volumen,
+    diseno_mezcla,
+    wbs=None,
+    destino=None,
+    turno=None,
+    humedad_arena=None,
+    asentamiento_final=None,
+    temperatura=None,
+    fuente_cemento=None,
+):
+    """
+    Inserta un despacho calculando consumos a partir de recetas.
+
+    IMPORTANTE (segun tu SQLite real):
+    - despachos tiene cemento_kg (NO cemento_he_kg / cemento_ip_kg)
+    - despachos SI tiene fuente_cemento
+    - recetas tiene cemento_kg y aditivo_a / aditivo_b
+      que mapeamos a:
+        aditivo_a -> aditivo_rheo_sika115
+        aditivo_b -> aditivo_basf_sika200
+    """
+    fecha = _safe_str(fecha)
+    diseno_mezcla = _safe_str(diseno_mezcla)
+    if not fecha or not diseno_mezcla:
+        return None
+
+    try:
+        volumen = float(volumen)
+    except (ValueError, TypeError):
+        return None
+    if volumen <= 0:
+        return None
+
+    wbs = _safe_str(wbs) or None
+    destino = _safe_str(destino) or None
+    turno = _safe_str(turno) or None
+
+    try:
+        humedad_arena = float(humedad_arena) if humedad_arena is not None else None
+    except (ValueError, TypeError):
+        humedad_arena = None
+
+    try:
+        asentamiento_final = float(asentamiento_final) if asentamiento_final is not None else None
+    except (ValueError, TypeError):
+        asentamiento_final = None
+
+    try:
+        temperatura = float(temperatura) if temperatura is not None else None
+    except (ValueError, TypeError):
+        temperatura = None
+
+    fuente_cemento = _safe_str(fuente_cemento) or "HE"  # default
+
+    conn = obtener_conexion_autonoma()
+    cur = conn.cursor()
+
+    # Cargar receta por codigo_diseno
+    cur.execute(
+        """
+        SELECT
+            codigo_diseno,
+            COALESCE(arena_kg,0) AS arena_kg,
+            COALESCE(grava_kg,0) AS grava_kg,
+            COALESCE(cemento_kg,0) AS cemento_kg,
+            COALESCE(agua_kg,0) AS agua_kg,
+            COALESCE(aditivo_a,0) AS aditivo_a,
+            COALESCE(aditivo_b,0) AS aditivo_b,
+            COALESCE(aditivo_delvo,0) AS aditivo_delvo,
+            COALESCE(aditivo_glenium_7950,0) AS aditivo_glenium_7950,
+            COALESCE(aditivo_glenium_7970,0) AS aditivo_glenium_7970,
+            COALESCE(aditivo_fibras,0) AS aditivo_fibras
+        FROM recetas
+        WHERE codigo_diseno = ?
+        """,
+        (diseno_mezcla,),
+    )
+    receta = cur.fetchone()
+    if not receta:
         conn.close()
         return None
 
-    campos = list(payload.keys())
-    placeholders = ",".join(["?"] * len(campos))
-    sql = f"INSERT INTO despachos ({','.join(campos)}) VALUES ({placeholders})"
+    # Receta se asume por m3: total = receta * volumen
+    arena_kg = _safe_float(receta["arena_kg"]) * volumen
+    grava_kg = _safe_float(receta["grava_kg"]) * volumen
+    cemento_kg = _safe_float(receta["cemento_kg"]) * volumen
+    agua_kg = _safe_float(receta["agua_kg"]) * volumen
+
+    # Mapear aditivos de recetas -> columnas reales en despachos
+    aditivo_rheo_sika115 = _safe_float(receta["aditivo_a"]) * volumen
+    aditivo_basf_sika200 = _safe_float(receta["aditivo_b"]) * volumen
+    aditivo_delvo = _safe_float(receta["aditivo_delvo"]) * volumen
+    aditivo_glenium_7950 = _safe_float(receta["aditivo_glenium_7950"]) * volumen
+    aditivo_glenium_7970 = _safe_float(receta["aditivo_glenium_7970"]) * volumen
+    aditivo_fibras = _safe_float(receta["aditivo_fibras"]) * volumen
 
     try:
-        cur.execute(sql, [payload[c] for c in campos])
+        cur.execute(
+            """
+            INSERT INTO despachos (
+                fecha, fuente_cemento, diseno_mezcla, lote, zona, wbs, volumen_m3, turno,
+                arena_humedad_pct, asentamiento_final_cm, temperatura_c,
+                arena_kg, grava_kg, cemento_kg, agua_kg,
+                aditivo_rheo_sika115, aditivo_basf_sika200, aditivo_delvo,
+                aditivo_glenium_7950, aditivo_glenium_7970, aditivo_fibras
+            )
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                fecha, fuente_cemento, diseno_mezcla, None, destino, wbs, volumen, turno,
+                humedad_arena, asentamiento_final, temperatura,
+                arena_kg, grava_kg, cemento_kg, agua_kg,
+                aditivo_rheo_sika115, aditivo_basf_sika200, aditivo_delvo,
+                aditivo_glenium_7950, aditivo_glenium_7970, aditivo_fibras
+            ),
+        )
+        new_id = cur.lastrowid
         conn.commit()
-        new_id = int(cur.lastrowid)
         conn.close()
         return new_id
     except Exception:
@@ -144,324 +256,273 @@ def insertar_despacho(
         return None
 
 
-# -------------------------
-# Historial + Consumo estimado (JOIN recetas)
-# -------------------------
-def _build_filters(
-    diseno: Optional[str] = None,
-    zona: Optional[str] = None,
-    turno: Optional[str] = None,
-    wbs: Optional[str] = None,
-) -> Tuple[str, List[Any]]:
-    where = []
-    args: List[Any] = []
+# -----------------------------
+# Historial (filas para historial.js)
+# -----------------------------
+def obtener_historial_consumo(
+    inicio,
+    fin,
+    diseno=None,
+    zona=None,
+    turno=None,
+    wbs=None,
+):
+    """
+    Devuelve filas con llaves que tu historial.js usa:
+    fecha, diseno_mezcla, zona, wbs, turno, volumen_m3,
+    est_arena_kg, est_grava_kg, est_cemento_he_kg, est_cemento_ip_kg, est_agua_kg,
+    est_rheo_sika115, est_basf_sika200, est_delvo, est_glenium_7950, est_glenium_7970, est_fibras
+    """
+    inicio = _safe_str(inicio)
+    fin = _safe_str(fin)
+    if not inicio or not fin:
+        return []
+
+    params = [inicio, fin]
+    where = ["d.fecha BETWEEN ? AND ?"]
 
     if diseno:
         where.append("d.diseno_mezcla = ?")
-        args.append(diseno)
-
+        params.append(diseno)
     if zona:
-        where.append("d.zona LIKE ?")
-        args.append(f"%{zona}%")
-
+        where.append("d.zona = ?")
+        params.append(zona)
     if turno:
         where.append("d.turno = ?")
-        args.append(turno)
-
+        params.append(turno)
     if wbs:
-        where.append("d.wbs LIKE ?")
-        args.append(f"%{wbs}%")
+        where.append("d.wbs = ?")
+        params.append(wbs)
 
-    sql_where = ""
-    if where:
-        sql_where = " AND " + " AND ".join(where)
+    where_sql = " AND ".join(where)
 
-    return sql_where, args
-
-
-def obtener_historial_consumo(
-    inicio: str,
-    fin: str,
-    diseno: Optional[str] = None,
-    zona: Optional[str] = None,
-    turno: Optional[str] = None,
-    wbs: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Devuelve filas de despachos + columnas estimadas:
-    est_arena_kg, est_grava_kg, est_cemento_he_kg, est_cemento_ip_kg, est_agua_kg,
-    est_aditivos...
-    """
-    sql_where, extra_args = _build_filters(diseno=diseno, zona=zona, turno=turno, wbs=wbs)
-
-    conn = _connect()
+    conn = obtener_conexion_autonoma()
     cur = conn.cursor()
 
-    # Nota:
-    # recetas tiene cemento_kg (no he/ip). Nosotros lo partimos para mostrar:
-    # HE = 60% , IP = 40% (si quieres otro split, me dices y lo cambio).
+    # Cemento se guarda como cemento_kg + fuente_cemento (HE/IP)
+    # Para mantener tu front (Cem HE / Cem IP), lo separamos por fuente.
     cur.execute(
         f"""
         SELECT
             d.id,
             d.fecha,
-            d.fuente_cemento,
             d.diseno_mezcla,
-            d.lote,
-            d.zona,
-            d.wbs,
-            d.volumen_m3,
-            d.turno,
-            d.arena_humedad_pct,
-            d.asentamiento_final_cm,
-            d.temperatura_c,
+            COALESCE(d.zona,'') AS zona,
+            COALESCE(d.wbs,'') AS wbs,
+            COALESCE(d.turno,'') AS turno,
+            COALESCE(d.volumen_m3,0) AS volumen_m3,
 
-            -- estimados por receta (si no hay receta, quedan NULL y luego los tratamos)
-            (d.volumen_m3 * r.arena_kg) AS est_arena_kg,
-            (d.volumen_m3 * r.grava_kg) AS est_grava_kg,
-            (d.volumen_m3 * r.cemento_kg * 0.60) AS est_cemento_he_kg,
-            (d.volumen_m3 * r.cemento_kg * 0.40) AS est_cemento_ip_kg,
-            (d.volumen_m3 * r.agua_kg) AS est_agua_kg,
+            COALESCE(d.arena_kg,0) AS est_arena_kg,
+            COALESCE(d.grava_kg,0) AS est_grava_kg,
+            CASE WHEN UPPER(COALESCE(d.fuente_cemento,'HE')) = 'IP'
+                 THEN 0 ELSE COALESCE(d.cemento_kg,0) END AS est_cemento_he_kg,
+            CASE WHEN UPPER(COALESCE(d.fuente_cemento,'HE')) = 'IP'
+                 THEN COALESCE(d.cemento_kg,0) ELSE 0 END AS est_cemento_ip_kg,
+            COALESCE(d.agua_kg,0) AS est_agua_kg,
 
-            (d.volumen_m3 * r.aditivo_rheo_sika115) AS est_aditivo_rheo_sika115,
-            (d.volumen_m3 * r.aditivo_basf_sika200) AS est_aditivo_basf_sika200,
-            (d.volumen_m3 * r.aditivo_delvo) AS est_aditivo_delvo,
-            (d.volumen_m3 * r.aditivo_glenium_7950) AS est_aditivo_glenium_7950,
-            (d.volumen_m3 * r.aditivo_glenium_7970) AS est_aditivo_glenium_7970,
-            (d.volumen_m3 * r.aditivo_fibras) AS est_aditivo_fibras
+            COALESCE(d.aditivo_rheo_sika115,0) AS est_rheo_sika115,
+            COALESCE(d.aditivo_basf_sika200,0) AS est_basf_sika200,
+            COALESCE(d.aditivo_delvo,0) AS est_delvo,
+            COALESCE(d.aditivo_glenium_7950,0) AS est_glenium_7950,
+            COALESCE(d.aditivo_glenium_7970,0) AS est_glenium_7970,
+            COALESCE(d.aditivo_fibras,0) AS est_fibras,
 
+            COALESCE(d.arena_humedad_pct,0) AS humedad_pct,
+            COALESCE(d.asentamiento_final_cm,0) AS asentamiento_cm,
+            COALESCE(d.temperatura_c,0) AS temp_c
         FROM despachos d
-        LEFT JOIN recetas r
-               ON r.codigo_diseno = d.diseno_mezcla
-        WHERE d.fecha >= ? AND d.fecha <= ?
-        {sql_where}
-        ORDER BY d.fecha ASC, d.id ASC
+        WHERE {where_sql}
+        ORDER BY d.fecha DESC, d.id DESC
         """,
-        [inicio, fin] + extra_args,
+        params,
     )
 
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
-    return rows
-
-
-def cruce_consumo_por_rango(
-    inicio: str,
-    fin: str,
-    diseno: Optional[str] = None,
-    zona: Optional[str] = None,
-    turno: Optional[str] = None,
-    wbs: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Retorna resumen de consumo estimado TOTAL en el rango.
-    """
-    filas = obtener_historial_consumo(inicio, fin, diseno=diseno, zona=zona, turno=turno, wbs=wbs)
-
-    resumen = {
-        "arena_kg": 0.0,
-        "grava_kg": 0.0,
-        "cemento_he_kg": 0.0,
-        "cemento_ip_kg": 0.0,
-        "agua_kg": 0.0,
-        "aditivo_rheo_sika115": 0.0,
-        "aditivo_basf_sika200": 0.0,
-        "aditivo_delvo": 0.0,
-        "aditivo_glenium_7950": 0.0,
-        "aditivo_glenium_7970": 0.0,
-        "aditivo_fibras": 0.0,
-        "_errores": 0,
-    }
-
-    for f in filas:
-        # si no hay receta, est_* vienen None
-        if f.get("est_arena_kg") is None and f.get("est_grava_kg") is None:
-            resumen["_errores"] += 1
-            continue
-
-        resumen["arena_kg"] += float(f.get("est_arena_kg") or 0)
-        resumen["grava_kg"] += float(f.get("est_grava_kg") or 0)
-        resumen["cemento_he_kg"] += float(f.get("est_cemento_he_kg") or 0)
-        resumen["cemento_ip_kg"] += float(f.get("est_cemento_ip_kg") or 0)
-        resumen["agua_kg"] += float(f.get("est_agua_kg") or 0)
-
-        resumen["aditivo_rheo_sika115"] += float(f.get("est_aditivo_rheo_sika115") or 0)
-        resumen["aditivo_basf_sika200"] += float(f.get("est_aditivo_basf_sika200") or 0)
-        resumen["aditivo_delvo"] += float(f.get("est_aditivo_delvo") or 0)
-        resumen["aditivo_glenium_7950"] += float(f.get("est_aditivo_glenium_7950") or 0)
-        resumen["aditivo_glenium_7970"] += float(f.get("est_aditivo_glenium_7970") or 0)
-        resumen["aditivo_fibras"] += float(f.get("est_aditivo_fibras") or 0)
-
-    return resumen
-
-
-# -------------------------
-# Inventario / stock
-# -------------------------
-def obtener_materiales() -> List[Dict[str, Any]]:
-    """
-    Lee materiales sin asumir el nombre exacto del minimo.
-    Normaliza a llave: minimo
-    """
-    cols = set(obtener_columnas_tabla("materiales"))
-
-    candidato_minimos = ["minimo", "minimo_stock", "stock_minimo", "min_stock", "min"]
-    col_min = next((c for c in candidato_minimos if c in cols), None)
-
-    base_cols = ["id", "nombre", "unidad"]
-    select_cols = base_cols.copy()
-    if col_min:
-        select_cols.append(col_min)
-
-    conn = _connect()
-    cur = conn.cursor()
-    cur.execute(f"SELECT {', '.join(select_cols)} FROM materiales ORDER BY nombre")
     rows = cur.fetchall()
     conn.close()
 
-    out: List[Dict[str, Any]] = []
+    out = []
     for r in rows:
-        d = dict(r)
-        minimo = 0
-        if col_min:
-            minimo = d.get(col_min, 0) if d.get(col_min) is not None else 0
-            if col_min != "minimo":
-                d.pop(col_min, None)
-
-        out.append(
-            {
-                "id": d.get("id"),
-                "nombre": d.get("nombre", ""),
-                "unidad": d.get("unidad", ""),
-                "minimo": float(minimo or 0),
-            }
-        )
+        out.append({k: r[k] for k in r.keys()})
     return out
 
 
-def obtener_stock_catalogo() -> List[Dict[str, Any]]:
+# -----------------------------
+# Resumen por rango (para alertas/graficas)
+# -----------------------------
+def cruce_consumo_por_rango(inicio, fin, diseno=None, zona=None, turno=None, wbs=None):
     """
-    Stock actual = sum(entradas) - sum(salidas) en tabla movimientos.
+    Retorna un dict material_norm -> consumo_total
+    (Este dict es el que cruzar_consumo_vs_stock consume)
     """
-    materiales = obtener_materiales()
+    inicio = _safe_str(inicio)
+    fin = _safe_str(fin)
+    if not inicio or not fin:
+        return {}
 
-    conn = _connect()
+    params = [inicio, fin]
+    where = ["fecha BETWEEN ? AND ?"]
+
+    if diseno:
+        where.append("diseno_mezcla = ?")
+        params.append(diseno)
+    if zona:
+        where.append("zona = ?")
+        params.append(zona)
+    if turno:
+        where.append("turno = ?")
+        params.append(turno)
+    if wbs:
+        where.append("wbs = ?")
+        params.append(wbs)
+
+    where_sql = " AND ".join(where)
+
+    conn = obtener_conexion_autonoma()
     cur = conn.cursor()
 
-    # intentamos detectar nombre de columna tipo
-    mov_cols = set(obtener_columnas_tabla("movimientos"))
-    col_tipo = "tipo" if "tipo" in mov_cols else None
+    # cemento: se suma cemento_kg y se separa por fuente_cemento
+    cur.execute(
+        f"""
+        SELECT
+            COALESCE(SUM(arena_kg),0) AS arena_kg,
+            COALESCE(SUM(grava_kg),0) AS grava_kg,
+            COALESCE(SUM(cemento_kg),0) AS cemento_total_kg,
+            COALESCE(SUM(CASE WHEN UPPER(COALESCE(fuente_cemento,'HE'))='IP' THEN cemento_kg ELSE 0 END),0) AS cemento_ip_kg,
+            COALESCE(SUM(CASE WHEN UPPER(COALESCE(fuente_cemento,'HE'))='IP' THEN 0 ELSE cemento_kg END),0) AS cemento_he_kg,
+            COALESCE(SUM(agua_kg),0) AS agua_kg,
 
-    out = []
-    for m in materiales:
-        mid = m["id"]
+            COALESCE(SUM(aditivo_rheo_sika115),0) AS aditivo_rheo_sika115,
+            COALESCE(SUM(aditivo_basf_sika200),0) AS aditivo_basf_sika200,
+            COALESCE(SUM(aditivo_delvo),0) AS aditivo_delvo,
+            COALESCE(SUM(aditivo_glenium_7950),0) AS aditivo_glenium_7950,
+            COALESCE(SUM(aditivo_glenium_7970),0) AS aditivo_glenium_7970,
+            COALESCE(SUM(aditivo_fibras),0) AS aditivo_fibras
+        FROM despachos
+        WHERE {where_sql}
+        """,
+        params,
+    )
+    row = cur.fetchone()
+    conn.close()
 
-        if col_tipo:
-            cur.execute(
-                """
-                SELECT
-                  SUM(CASE WHEN tipo='Entrada' THEN COALESCE(cantidad,0) ELSE 0 END) AS entradas,
-                  SUM(CASE WHEN tipo='Salida' THEN COALESCE(cantidad,0) ELSE 0 END) AS salidas
-                FROM movimientos
-                WHERE material_id = ?
-                """,
-                [mid],
-            )
-        else:
-            # fallback: si no hay columna tipo, asumimos cantidad neta
-            cur.execute(
-                "SELECT SUM(COALESCE(cantidad,0)) AS neto FROM movimientos WHERE material_id = ?",
-                [mid],
-            )
+    consumo = {
+        "arena": _safe_float(row["arena_kg"]),
+        "grava": _safe_float(row["grava_kg"]),
+        "cemento he": _safe_float(row["cemento_he_kg"]),
+        "cemento ip": _safe_float(row["cemento_ip_kg"]),
+        "agua": _safe_float(row["agua_kg"]),
+        "rheo 1000": _safe_float(row["aditivo_rheo_sika115"]),
+        "sika 115": _safe_float(row["aditivo_rheo_sika115"]),
+        "basf 719": _safe_float(row["aditivo_basf_sika200"]),
+        "sika 200": _safe_float(row["aditivo_basf_sika200"]),
+        "delvo": _safe_float(row["aditivo_delvo"]),
+        "masterglenium 7950": _safe_float(row["aditivo_glenium_7950"]),
+        "masterglenium 7970": _safe_float(row["aditivo_glenium_7970"]),
+        "sika pp 48-barchip": _safe_float(row["aditivo_fibras"]),
+    }
+    return consumo
 
-        r = cur.fetchone()
-        if col_tipo:
-            entradas = float(r["entradas"] or 0)
-            salidas = float(r["salidas"] or 0)
-            stock = entradas - salidas
-        else:
-            stock = float(r["neto"] or 0)
 
-        out.append(
-            {
-                "id": mid,
-                "material": m["nombre"],
-                "unidad": m["unidad"],
-                "minimo": float(m["minimo"] or 0),
-                "stock_actual": stock,
-            }
-        )
+# -----------------------------
+# Stock / inventario desde DB
+# -----------------------------
+def obtener_stock_catalogo():
+    """
+    Retorna un catalogo normalizado para cruce consumo vs stock.
+    Lee de:
+      - materiales (nombre, unidad, minimo?) y
+      - stock (material_id, cantidad) si existe
+    """
+    conn = obtener_conexion_autonoma()
+    cur = conn.cursor()
+
+    cols_materiales = set(obtener_columnas_tabla("materiales"))
+    cols_stock = set(obtener_columnas_tabla("stock")) if _tabla_tiene_columna("stock", "material_id") else set()
+
+    # materiales
+    if "minimo" in cols_materiales:
+        cur.execute("SELECT id, nombre, unidad, COALESCE(minimo,0) AS minimo FROM materiales")
+    else:
+        cur.execute("SELECT id, nombre, unidad, 0 AS minimo FROM materiales")
+    mats = cur.fetchall()
+
+    # stock
+    stock_map = {}
+    if cols_stock and ("cantidad" in cols_stock):
+        cur.execute("SELECT material_id, COALESCE(cantidad,0) AS cantidad FROM stock")
+        for r in cur.fetchall():
+            stock_map[int(r["material_id"])] = _safe_float(r["cantidad"])
 
     conn.close()
-    return out
+
+    def norm(s: str):
+        return (s or "").strip().lower()
+
+    catalogo = {}
+    for m in mats:
+        mid = int(m["id"])
+        nombre = m["nombre"]
+        catalogo[norm(nombre)] = {
+            "id": mid,
+            "nombre": nombre,
+            "unidad": m["unidad"],
+            "minimo": _safe_float(m["minimo"]),
+            "stock": stock_map.get(mid, 0.0),
+        }
+
+    return catalogo
 
 
-def cruzar_consumo_vs_stock(resumen_consumo: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+def cruzar_consumo_vs_stock(resumen_consumo: dict):
     """
-    Cruza resumen_consumo vs stock de materiales.
+    Cruce:
+    - resumen_consumo: dict material_norm -> consumo_total
     Devuelve:
-      filas: [{material, unidad, stock_actual, minimo, consumo_estimado, deficit_sugerido, bajo_minimo}]
-      no_mapeados: [campos consumo sin mapeo]
-      no_encontrados: [materiales mapeados que no existen]
+    - filas
+    - no_mapeados
+    - no_encontrados (reservado)
     """
-
-    # Mapeo consumo -> nombre material (debe coincidir con materiales.nombre)
-    # Ajusta los nombres EXACTOS a como tengas tus materiales cargados.
-    mapping = {
-        "arena_kg": "Arena",
-        "grava_kg": "Grava",
-        "cemento_he_kg": "Cemento HE",
-        "cemento_ip_kg": "Cemento IP",
-        "agua_kg": "Agua",
-        "aditivo_rheo_sika115": "RHEO 1000 + Sika 115",
-        "aditivo_basf_sika200": "BASF 719 + Sika 200",
-        "aditivo_delvo": "Delvo",
-        "aditivo_glenium_7950": "MasterGlenium 7950",
-        "aditivo_glenium_7970": "MasterGlenium 7970",
-        "aditivo_fibras": "Sika PP 48 - Barchip",
-    }
-
     catalogo = obtener_stock_catalogo()
-    idx = {c["material"]: c for c in catalogo}
 
     filas = []
     no_mapeados = []
-    no_encontrados = []
 
-    for k, v in resumen_consumo.items():
-        if k.startswith("_"):
+    for mat_norm, consumo in resumen_consumo.items():
+        c = float(consumo or 0.0)
+
+        if mat_norm not in catalogo:
+            no_mapeados.append(mat_norm)
             continue
 
-        if k not in mapping:
-            no_mapeados.append(k)
-            continue
+        it = catalogo[mat_norm]
+        stock = float(it.get("stock", 0.0) or 0.0)
+        minimo = float(it.get("minimo", 0.0) or 0.0)
 
-        nombre_mat = mapping[k]
-        if nombre_mat not in idx:
-            no_encontrados.append(nombre_mat)
-            continue
+        saldo = stock - c
+        deficit = abs(saldo) if saldo < 0 else 0.0
 
-        item = idx[nombre_mat]
-        consumo = float(v or 0)
-        stock = float(item["stock_actual"] or 0)
-        minimo = float(item["minimo"] or 0)
-
-        deficit = max(consumo - stock, 0)
-        bajo_minimo = stock < minimo
+        estado = "OK"
+        if saldo < 0:
+            estado = "CRITICO"
+        elif minimo > 0 and saldo < minimo:
+            estado = "BAJO"
 
         filas.append(
             {
-                "material": nombre_mat,
-                "unidad": item["unidad"],
-                "stock_actual": stock,
+                "material": it["nombre"],
+                "unidad": it.get("unidad", ""),
+                "stock": stock,
                 "minimo": minimo,
-                "consumo_estimado": consumo,
-                "deficit_sugerido": deficit,
-                "bajo_minimo": bajo_minimo,
+                "consumo": c,
+                "saldo": saldo,
+                "deficit": deficit,
+                "estado": estado,
             }
         )
 
-    # orden: deficit desc, luego bajo minimo
-    filas.sort(key=lambda x: (x["deficit_sugerido"], x["bajo_minimo"]), reverse=True)
+    no_encontrados = []
+
+    orden = {"CRITICO": 0, "BAJO": 1, "OK": 2}
+    filas.sort(key=lambda x: (orden.get(x["estado"], 9), x["material"].lower()))
 
     return filas, no_mapeados, no_encontrados
