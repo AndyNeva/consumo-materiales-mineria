@@ -1,7 +1,10 @@
+# Importar librerías
 from flask import Flask, render_template, jsonify, request, Response
 import os
 import json
 import time
+import sqlite3
+import logging
 
 import pandas as pd
 
@@ -14,18 +17,113 @@ from utils.loaders import (
     obtener_historial_consumo,
 )
 
-# Si luego quieres usar tu motor DF->Plotly, lo dejamos importado
-from ml.estadisticas_dinamicas import generar_graficos_dinamicos  # noqa: F401
-
-# --- APIs ML (NO se tocan) ---
+# API ML (NO tocar rutas/contratos)
 from ml.predictor import predecir_batch, predecir_materiales, obtener_info_modelo
 
 
+# -------------------------------------------------
+# Flask
+# -------------------------------------------------
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-app.config["DATABASE"] = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
-os.environ["DATABASE"] = app.config["DATABASE"]
+DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
+app.config["DATABASE"] = DB_PATH
+os.environ["DATABASE"] = DB_PATH  # para que loaders use la misma DB
+
+logging.basicConfig(level=logging.INFO)
+
+
+# -------------------------------------------------
+# Migración ligera de SQLite (sin romper datos existentes)
+# -------------------------------------------------
+def _get_cols(conn, table):
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table})")
+    return [r[1] for r in cur.fetchall()]
+
+
+def _add_col(conn, table, col, coltype, default_sql=None):
+    cur = conn.cursor()
+    cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
+    if default_sql:
+        cur.execute(default_sql)
+    conn.commit()
+
+
+def ensure_db_schema():
+    """
+    Corrige los errores que estás viendo:
+    - table despachos has no column named cemento_he_kg
+    - no such column r.aditivo_rheo_sika115
+    """
+    if not os.path.exists(DB_PATH):
+        raise FileNotFoundError(f"No existe la base de datos en: {DB_PATH}")
+
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        # --- DESPACHOS: agregar columnas nuevas (si faltan)
+        cols_d = _get_cols(conn, "despachos")
+
+        # En versiones antiguas existía cemento_kg; ahora usamos cemento_he_kg y cemento_ip_kg
+        if "cemento_he_kg" not in cols_d:
+            _add_col(
+                conn,
+                "despachos",
+                "cemento_he_kg",
+                "REAL",
+                "UPDATE despachos SET cemento_he_kg = COALESCE(cemento_kg, 0)",
+            )
+            logging.info("DB: agregado despachos.cemento_he_kg (backfill desde cemento_kg)")
+
+        if "cemento_ip_kg" not in cols_d:
+            _add_col(conn, "despachos", "cemento_ip_kg", "REAL", "UPDATE despachos SET cemento_ip_kg = 0")
+            logging.info("DB: agregado despachos.cemento_ip_kg")
+
+        # --- RECETAS: agregar columnas nuevas (si faltan)
+        cols_r = _get_cols(conn, "recetas")
+
+        if "cemento_he_kg" not in cols_r:
+            _add_col(
+                conn,
+                "recetas",
+                "cemento_he_kg",
+                "REAL",
+                "UPDATE recetas SET cemento_he_kg = COALESCE(cemento_kg, 0)",
+            )
+            logging.info("DB: agregado recetas.cemento_he_kg (backfill desde cemento_kg)")
+
+        if "cemento_ip_kg" not in cols_r:
+            _add_col(conn, "recetas", "cemento_ip_kg", "REAL", "UPDATE recetas SET cemento_ip_kg = 0")
+            logging.info("DB: agregado recetas.cemento_ip_kg")
+
+        # Campos que tu app espera para mapear aditivos
+        if "aditivo_rheo_sika115" not in cols_r:
+            _add_col(
+                conn,
+                "recetas",
+                "aditivo_rheo_sika115",
+                "REAL",
+                "UPDATE recetas SET aditivo_rheo_sika115 = COALESCE(aditivo_a, 0)",
+            )
+            logging.info("DB: agregado recetas.aditivo_rheo_sika115 (backfill desde aditivo_a)")
+
+        if "aditivo_basf_sika200" not in cols_r:
+            _add_col(
+                conn,
+                "recetas",
+                "aditivo_basf_sika200",
+                "REAL",
+                "UPDATE recetas SET aditivo_basf_sika200 = COALESCE(aditivo_b, 0)",
+            )
+            logging.info("DB: agregado recetas.aditivo_basf_sika200 (backfill desde aditivo_b)")
+
+    finally:
+        conn.close()
+
+
+# Ejecutar migración al iniciar
+ensure_db_schema()
 
 
 # -------------------------
@@ -85,15 +183,12 @@ def api_dashboard():
 @app.route("/api/recetas")
 def api_recetas():
     try:
-        import sqlite3
-
         conn = sqlite3.connect(app.config["DATABASE"])
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute("SELECT codigo_diseno FROM recetas ORDER BY codigo_diseno")
         rows = cur.fetchall()
         conn.close()
-
         disenos = [r["codigo_diseno"] for r in rows if r["codigo_diseno"]]
         return jsonify({"ok": True, "disenos": disenos})
     except Exception as e:
@@ -119,9 +214,6 @@ def api_despachos():
         asentamiento_final_cm = payload.get("asentamiento_final_cm", 0)
         temperatura_c = payload.get("temperatura_c", 0)
 
-        # opcional: si luego lo agregas al front
-        fuente_cemento = payload.get("fuente_cemento", "HE")
-
         new_id = insertar_despacho(
             fecha=fecha,
             volumen=volumen_m3,
@@ -132,11 +224,10 @@ def api_despachos():
             humedad_arena=arena_humedad_pct,
             asentamiento_final=asentamiento_final_cm,
             temperatura=temperatura_c,
-            fuente_cemento=fuente_cemento,
         )
 
         if not new_id:
-            return jsonify({"ok": False, "error": "No se pudo insertar el despacho (revisa validaciones/receta)."}), 400
+            return jsonify({"ok": False, "error": "No se pudo insertar el despacho (revisa validaciones/receta/DB)."}), 400
 
         return jsonify({"ok": True, "id": new_id})
 
@@ -145,7 +236,7 @@ def api_despachos():
 
 
 # -------------------------
-# Historial + consumo estimado (lo usa historial.js)
+# Historial (lo usa historial.js)
 # -------------------------
 @app.route("/api/historial_consumo")
 def api_historial_consumo():
@@ -163,8 +254,7 @@ def api_historial_consumo():
 
     try:
         filas = obtener_historial_consumo(
-            inicio,
-            fin,
+            inicio, fin,
             diseno=diseno,
             zona=zona,
             turno=turno,
@@ -198,15 +288,13 @@ def api_resumen_consumo():
 
     try:
         resumen = cruce_consumo_por_rango(
-            inicio,
-            fin,
+            inicio, fin,
             diseno=diseno,
             zona=zona,
             turno=turno,
             wbs=wbs,
         )
-
-        return jsonify({"ok": True, "resumen": resumen, "total_registros": None})
+        return jsonify({"ok": True, "resumen": resumen})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -225,8 +313,7 @@ def api_alertas_consumo():
 
     try:
         resumen = cruce_consumo_por_rango(
-            inicio,
-            fin,
+            inicio, fin,
             diseno=diseno,
             zona=zona,
             turno=turno,
@@ -234,13 +321,18 @@ def api_alertas_consumo():
         )
         filas, no_mapeados, no_encontrados = cruzar_consumo_vs_stock(resumen)
 
-        return jsonify({"ok": True, "filas": filas, "no_mapeados": no_mapeados, "no_encontrados": no_encontrados})
+        return jsonify({
+            "ok": True,
+            "filas": filas,
+            "no_mapeados": no_mapeados,
+            "no_encontrados": no_encontrados,
+        })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # -------------------------
-# Graficas (Plotly) - lo usa graficas.js
+# Gráficas (Plotly)
 # -------------------------
 def _plotly_template_dark():
     return {
@@ -272,44 +364,36 @@ def api_graficas():
         df = pd.DataFrame(filas)
         df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
 
-        # 1) Volumen por dia
-        g1 = (
-            df.dropna(subset=["fecha"])
-            .groupby(df["fecha"].dt.date)["volumen_m3"]
-            .sum()
-            .reset_index()
-        )
+        g1 = df.dropna(subset=["fecha"]).groupby(df["fecha"].dt.date)["volumen_m3"].sum().reset_index()
         fig_vol_dia = {
             "data": [{"type": "bar", "x": [str(x) for x in g1["fecha"]], "y": [float(v) for v in g1["volumen_m3"]]}],
             "layout": {"title": "Volumen por día (m³)", **_plotly_template_dark()},
         }
 
-        # 2) Volumen por diseño
         g2 = df.groupby("diseno_mezcla")["volumen_m3"].sum().reset_index().sort_values("volumen_m3", ascending=False)
         fig_vol_diseno = {
             "data": [{"type": "bar", "x": g2["diseno_mezcla"].tolist(), "y": [float(v) for v in g2["volumen_m3"]]}],
             "layout": {"title": "Volumen por diseño (m³)", **_plotly_template_dark()},
         }
 
-        # 3) Consumo total por material (desde resumen consumo vs stock)
         resumen = cruce_consumo_por_rango(inicio, fin, diseno=diseno, zona=zona)
 
         labels = [
             "Arena (kg)", "Grava (kg)", "Cem HE (kg)", "Cem IP (kg)", "Agua (kg)",
-            "Rheo+Sika115", "BASF+Sika200", "Delvo", "Glenium 7950", "Glenium 7970", "Fibras"
+            "Rheo + Sika115", "BASF + Sika200", "Delvo", "Glenium 7950", "Glenium 7970", "Fibras"
         ]
         values = [
-            float(resumen.get("arena", 0)),
-            float(resumen.get("grava", 0)),
-            float(resumen.get("cemento he", 0)),
-            float(resumen.get("cemento ip", 0)),
-            float(resumen.get("agua", 0)),
-            float(resumen.get("rheo 1000", 0)),            # mismo consumo
-            float(resumen.get("basf 719", 0)),             # mismo consumo
-            float(resumen.get("delvo", 0)),
-            float(resumen.get("masterglenium 7950", 0)),
-            float(resumen.get("masterglenium 7970", 0)),
-            float(resumen.get("sika pp 48-barchip", 0)),
+            float(resumen.get("arena_kg", 0)),
+            float(resumen.get("grava_kg", 0)),
+            float(resumen.get("cemento_he_kg", 0)),
+            float(resumen.get("cemento_ip_kg", 0)),
+            float(resumen.get("agua_kg", 0)),
+            float(resumen.get("aditivo_rheo_sika115", 0)),
+            float(resumen.get("aditivo_basf_sika200", 0)),
+            float(resumen.get("aditivo_delvo", 0)),
+            float(resumen.get("aditivo_glenium_7950", 0)),
+            float(resumen.get("aditivo_glenium_7970", 0)),
+            float(resumen.get("aditivo_fibras", 0)),
         ]
 
         fig_consumo_mat = {
@@ -323,21 +407,14 @@ def api_graficas():
             "volumen_por_diseno": fig_vol_diseno,
         }
 
-        return jsonify(
-            {
-                "ok": True,
-                "figs": figs,
-                "num_registros": int(df.shape[0]),
-                "graficas_disponibles": list(figs.keys()),
-            }
-        )
+        return jsonify({"ok": True, "figs": figs, "num_registros": int(df.shape[0]), "graficas_disponibles": list(figs.keys())})
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # -------------------
-# APIs de Prediccion ML (SE CONSERVAN)
+# APIs de Predicción ML (CONSERVAR)
 # -------------------
 @app.route("/api/ml/info")
 def api_ml_info():
@@ -345,9 +422,7 @@ def api_ml_info():
         info = obtener_info_modelo()
         return jsonify(info)
     except FileNotFoundError:
-        return jsonify(
-            {"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}
-        ), 404
+        return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
     except Exception as e:
         return jsonify({"error": f"Error al cargar modelo: {str(e)}"}), 500
 
@@ -378,9 +453,7 @@ def api_ml_predecir():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except FileNotFoundError:
-        return jsonify(
-            {"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}
-        ), 404
+        return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
     except Exception as e:
         return jsonify({"error": f"Error en la predicción: {str(e)}"}), 500
 
@@ -401,9 +474,7 @@ def api_ml_predecir_batch():
         return jsonify(resultado)
 
     except FileNotFoundError:
-        return jsonify(
-            {"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}
-        ), 404
+        return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
     except Exception as e:
         return jsonify({"error": f"Error en predicción batch: {str(e)}"}), 500
 
