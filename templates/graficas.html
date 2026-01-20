@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gráficas | Planta de Hormigón</title>
+
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#0b1220; --surface:#0f1a2e; --surface2:#0c1628; --card:#101f37;
+      --border:rgba(255,255,255,.08);
+      --muted:rgba(255,255,255,.72);
+      --text:rgba(255,255,255,.92);
+      --accent:#4f8cff;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius:16px; --radius2:22px;
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --good:#22c55e; --warn:#f59e0b; --bad:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:var(--sans); color:var(--text);
+      background:
+        radial-gradient(1200px 600px at 15% 10%, rgba(79,140,255,.25), transparent 60%),
+        radial-gradient(900px 500px at 85% 20%, rgba(121,167,255,.18), transparent 55%),
+        radial-gradient(900px 600px at 55% 95%, rgba(34,197,94,.10), transparent 60%),
+        linear-gradient(180deg, var(--bg), #070b14 70%);
+    }
+    a{color:inherit;text-decoration:none}
+    .app{min-height:100vh;display:grid;grid-template-columns:280px 1fr}
+    .sidebar{
+      padding:22px 18px;
+      background: linear-gradient(180deg, rgba(15,26,46,.95), rgba(12,22,40,.88));
+      border-right:1px solid var(--border);
+    }
+    .brand{display:flex;align-items:center;gap:12px;padding:10px 10px 16px;border-bottom:1px solid var(--border);margin-bottom:16px}
+    .logo{width:38px;height:38px;border-radius:12px;background: radial-gradient(circle at 30% 30%, rgba(121,167,255,.85), rgba(79,140,255,.55) 45%, rgba(34,197,94,.25));box-shadow: inset 0 0 0 1px rgba(255,255,255,.10);}
+    .brand h1{margin:0;font-size:14px;font-weight:650;line-height:1.2}
+    .brand small{display:block;margin-top:3px;font-size:12px;color:var(--muted);font-weight:500}
+
+    .nav{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+    .nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;border:1px solid transparent;color:rgba(255,255,255,.86);transition:.12s}
+    .nav a:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08);transform:translateY(-1px)}
+    .nav a.active{background: linear-gradient(180deg, rgba(79,140,255,.18), rgba(79,140,255,.08));border-color:rgba(79,140,255,.35)}
+
+    .main{padding:26px 26px 40px}
+    .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+    .title h2{margin:0;font-size:22px}
+    .title p{margin:8px 0 0;color:var(--muted);font-size:13px;max-width:90ch;line-height:1.45}
+
+    .card{
+      border-radius: var(--radius2);
+      background: linear-gradient(180deg, rgba(16,31,55,.92), rgba(12,22,40,.92));
+      border:1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding:16px;
+    }
+
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1}
+    label{font-size:12px;color:var(--muted)}
+    input,select{
+      width:100%;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      border-radius:14px;
+      padding:10px 12px;
+      outline:none;
+    }
+    input:focus,select:focus{
+      border-color:rgba(79,140,255,.45);
+      box-shadow:0 0 0 4px rgba(79,140,255,.18);
+      background:rgba(255,255,255,.06)
+    }
+    select option{color:#0f172a;background:#fff}
+
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:10px 12px;border-radius:14px;
+      background: rgba(255,255,255,.04);
+      border:1px solid var(--border);
+      color: rgba(255,255,255,.92);
+      cursor:pointer;font-weight:800;
+      transition:.12s;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+    .btn.primary{background: rgba(79,140,255,.18); border-color: rgba(79,140,255,.35);}
+
+    .meta{
+      margin-top:12px;
+      display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+      color:var(--muted);font-size:12px;
+    }
+    .chip{
+      font-family:var(--mono);
+      font-size:11px;
+      padding:6px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      color: rgba(255,255,255,.88);
+    }
+
+    .grid{
+      margin-top:14px;
+      display:grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap:12px;
+    }
+    .span-12{grid-column: span 12;}
+    .span-6{grid-column: span 6;}
+    .span-4{grid-column: span 4;}
+    .span-8{grid-column: span 8;}
+    @media(max-width:1100px){
+      .span-6,.span-4,.span-8{grid-column: span 12;}
+    }
+
+    .chart-title{
+      margin:0 0 8px;
+      font-size:14px;
+      font-weight:850;
+    }
+    .muted{color:var(--muted);font-size:12px;line-height:1.45}
+
+    /* Plotly container feel */
+    .plot-wrap{
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.03);
+      border-radius: 16px;
+      padding:10px;
+    }
+
+    @media(max-width:980px){.app{grid-template-columns:1fr}.sidebar{display:none}}
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>Planta de Hormigón</h1>
+          <small>Control de producción & inventario</small>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Navegación">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/registro">Registro diario</a>
+        <a href="/inventario">Inventario</a>
+        <a href="/historial">Historial</a>
+        <a class="active" href="/graficas" aria-current="page">Gráficas</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="title">
+          <h2>Gráficas</h2>
+          <p>Se generan desde el Historial usando los filtros (inicio/fin/diseño/zona). Puedes ajustar aquí y regenerar.</p>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <a class="btn" id="btnVolverHistorial" href="/historial">Volver a Historial</a>
+        </div>
+      </div>
+
+      <section class="card">
+        <form id="formGraficas">
+          <div class="row">
+            <div class="field">
+              <label for="inicio">Inicio</label>
+              <input id="inicio" type="date" required />
+            </div>
+            <div class="field">
+              <label for="fin">Fin</label>
+              <input id="fin" type="date" required />
+            </div>
+            <div class="field">
+              <label for="diseno">Diseño</label>
+              <select id="diseno">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="zona">Zona</label>
+              <input id="zona" type="text" placeholder="Ej: Mina" />
+            </div>
+
+            <div class="field" style="flex:0 0 220px; align-self:flex-end;">
+              <button class="btn primary" id="btnGenerar" type="submit">Generar</button>
+            </div>
+          </div>
+
+          <div class="meta">
+            <span class="chip" id="chipReg">Registros: —</span>
+            <span class="chip" id="chipDisp">Disponibles: —</span>
+            <span class="chip" id="chipEstado">Estado: —</span>
+          </div>
+        </form>
+      </section>
+
+      <div class="grid" id="chartsGrid">
+        <section class="card span-12">
+          <p class="muted" id="estado">Listo para generar.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/js/graficas.js"></script>
+</body>
+</html>

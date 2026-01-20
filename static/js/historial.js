@@ -19,17 +19,22 @@
   }
 
   function setStatus(msg) {
-    $("statusChip").textContent = `Estado: ${msg}`;
+    const chip = $("statusChip");
+    if (chip) chip.textContent = `Estado: ${msg}`;
   }
 
   function setMeta(total, tiempos) {
-    $("totalChip").textContent = `Total: ${total ?? 0}`;
-    $("bstChip").textContent = `BST: ${tiempos?.bst ?? "—"}`;
-    $("avlChip").textContent = `AVL: ${tiempos?.avl ?? "—"}`;
+    const t = $("totalChip");
+    const b = $("bstChip");
+    const a = $("avlChip");
+    if (t) t.textContent = `Total: ${total ?? 0}`;
+    if (b) b.textContent = `BST: ${tiempos?.bst ?? "—"}`;
+    if (a) a.textContent = `AVL: ${tiempos?.avl ?? "—"}`;
   }
 
   function clearTable() {
-    $("tbodyHistorial").innerHTML = "";
+    const tb = $("tbodyHistorial");
+    if (tb) tb.innerHTML = "";
   }
 
   function num(v) {
@@ -41,6 +46,7 @@
 
   function renderRows(rows) {
     const tbody = $("tbodyHistorial");
+    if (!tbody) return;
     tbody.innerHTML = "";
 
     rows.forEach((r) => {
@@ -76,30 +82,38 @@
 
   async function cargarDisenos() {
     const sel = $("diseno");
+    if (!sel) return;
+
     const keepFirst = sel.querySelector("option[value='']");
     sel.innerHTML = "";
-    sel.appendChild(keepFirst);
+    if (keepFirst) sel.appendChild(keepFirst);
 
-    const res = await fetch("/api/recetas");
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/recetas");
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok || !data.ok) {
+      if (!res.ok || !data.ok) {
+        setStatus("No se pudieron cargar diseños");
+        return;
+      }
+
+      (data.disenos || []).forEach((d) => {
+        const opt = document.createElement("option");
+        opt.value = d;
+        opt.textContent = d;
+        sel.appendChild(opt);
+      });
+    } catch (err) {
+      console.error(err);
       setStatus("No se pudieron cargar diseños");
-      return;
     }
-
-    (data.disenos || []).forEach((d) => {
-      const opt = document.createElement("option");
-      opt.value = d;
-      opt.textContent = d;
-      sel.appendChild(opt);
-    });
   }
 
   function renderSummary(resumen, totalRegistros) {
     const box = $("summaryBox");
     const grid = $("summaryGrid");
     const hint = $("summaryHint");
+    if (!box || !grid || !hint) return;
 
     grid.innerHTML = "";
     hint.textContent = "";
@@ -143,6 +157,7 @@
     const box = $("alertsBox");
     const tbody = $("tbodyAlertas");
     const hint = $("alertsHint");
+    if (!box || !tbody || !hint) return;
 
     tbody.innerHTML = "";
     hint.textContent = "";
@@ -185,20 +200,46 @@
     box.style.display = "block";
   }
 
+  // NUEVO: arma un link a /graficas conservando filtros actuales
+  function actualizarLinkGraficas() {
+    const btn = $("btnGraficas");
+    if (!btn) return;
+
+    const inicio = ($("inicio")?.value || "").trim();
+    const fin = ($("fin")?.value || "").trim();
+    const diseno = ($("diseno")?.value || "").trim();
+    const zona = ($("zona")?.value || "").trim();
+    const turno = ($("turno")?.value || "").trim();
+    const wbs = ($("wbs")?.value || "").trim();
+
+    const params = new URLSearchParams();
+    if (inicio) params.set("inicio", inicio);
+    if (fin) params.set("fin", fin);
+    if (diseno) params.set("diseno", diseno);
+    if (zona) params.set("zona", zona);
+    if (turno) params.set("turno", turno);
+    if (wbs) params.set("wbs", wbs);
+
+    const qs = params.toString();
+    btn.setAttribute("href", qs ? `/graficas?${qs}` : "/graficas");
+  }
+
   async function buscarConConsumoYAlertas(e) {
     e.preventDefault();
     setStatus("Buscando...");
-    $("hint").textContent = "";
+    const hintEl = $("hint");
+    if (hintEl) hintEl.textContent = "";
 
-    const inicio = $("inicio").value;
-    const fin = $("fin").value;
-    const diseno = $("diseno").value;
-    const zona = $("zona").value.trim();
-    const turno = $("turno").value;
-    const wbs = $("wbs").value.trim();
+    const inicio = ($("inicio")?.value || "").trim();
+    const fin = ($("fin")?.value || "").trim();
+    const diseno = ($("diseno")?.value || "").trim();
+    const zona = ($("zona")?.value || "").trim();
+    const turno = ($("turno")?.value || "").trim();
+    const wbs = ($("wbs")?.value || "").trim();
 
     if (!inicio || !fin) {
       setStatus("Faltan fechas");
+      actualizarLinkGraficas();
       return;
     }
 
@@ -222,9 +263,12 @@
       clearTable();
       setMeta(0, null);
       setStatus("Error");
-      $("hint").textContent = dataRows.error ? String(dataRows.error) : `HTTP ${resRows.status}`;
-      $("summaryBox").style.display = "none";
-      $("alertsBox").style.display = "none";
+      if (hintEl) hintEl.textContent = dataRows.error ? String(dataRows.error) : `HTTP ${resRows.status}`;
+      const sb = $("summaryBox");
+      const ab = $("alertsBox");
+      if (sb) sb.style.display = "none";
+      if (ab) ab.style.display = "none";
+      actualizarLinkGraficas();
       return;
     }
 
@@ -245,24 +289,44 @@
 
     if (!dataRows.datos || dataRows.datos.length === 0) {
       setStatus("OK (sin resultados)");
-      $("hint").textContent = "No se encontraron registros con esos filtros.";
+      if (hintEl) hintEl.textContent = "No se encontraron registros con esos filtros.";
       renderSummary(null, 0);
       renderAlertas(null);
+      actualizarLinkGraficas();
       return;
     }
 
     setStatus("OK");
+    actualizarLinkGraficas();
   }
 
   document.addEventListener("DOMContentLoaded", async () => {
-    $("fin").value = todayISO();
-    $("inicio").value = daysAgoISO(7);
+    const finEl = $("fin");
+    const iniEl = $("inicio");
+
+    if (finEl) finEl.value = todayISO();
+    if (iniEl) iniEl.value = daysAgoISO(7);
 
     await cargarDisenos();
 
     const form = $("historialForm");
-    form.addEventListener("submit", buscarConConsumoYAlertas);
+    if (form) {
+      form.addEventListener("submit", buscarConConsumoYAlertas);
 
-    form.dispatchEvent(new Event("submit"));
+      // NUEVO: cada vez que cambian filtros, actualiza el href del boton Graficas
+      ["inicio", "fin", "diseno", "zona", "turno", "wbs"].forEach((id) => {
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener("change", actualizarLinkGraficas);
+        el.addEventListener("input", actualizarLinkGraficas);
+      });
+
+      // primera carga
+      actualizarLinkGraficas();
+      form.dispatchEvent(new Event("submit"));
+    } else {
+      // si no hay form, al menos setea el link
+      actualizarLinkGraficas();
+    }
   });
 })();
