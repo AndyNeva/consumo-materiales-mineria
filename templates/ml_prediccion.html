@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Predicción ML | Planta de Hormigón</title>
+
+  <style>
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      color:#e6edf7;
+      background: radial-gradient(1200px 800px at 20% -10%, #1b3a6b 0%, #0b1220 45%, #050914 100%);
+    }
+
+    .app{ display:grid; grid-template-columns:260px 1fr; min-height:100vh; }
+
+    aside{
+      padding:20px;
+      background:linear-gradient(180deg,rgba(20,33,61,.95),rgba(8,14,30,.95));
+      display:flex; flex-direction:column;
+    }
+    .brand{ font-weight:700; margin-bottom:4px; font-size:18px; }
+    .brand-sub{ opacity:.7; font-size:14px; margin-bottom:18px; }
+
+    .nav a{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 14px; margin-bottom:6px;
+      border-radius:12px;
+      color:#e6edf7; text-decoration:none;
+      background:rgba(255,255,255,.02);
+    }
+    .nav a.active{ background:linear-gradient(90deg,#1f3b6d,#162a4f); }
+    .nav a:hover{ background:rgba(255,255,255,.06); }
+
+    .logout{ margin-top:auto; }
+    .logout button{
+      width:100%;
+      padding:10px;
+      border-radius:14px;
+      border:0;
+      background:#7f1d1d;
+      color:#fff;
+      cursor:pointer;
+    }
+    .logout button:hover{background:#991b1b}
+
+    main{ padding:24px 28px; }
+    h1{ margin:0 0 6px; }
+    .subtitle{ opacity:.7; margin-bottom:18px; max-width:980px; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap:14px;
+      align-items:start;
+    }
+    @media (max-width: 1100px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      background:linear-gradient(180deg,rgba(20,33,61,.85),rgba(10,18,35,.85));
+      border-radius:18px;
+      padding:14px;
+      border:1px solid rgba(255,255,255,.06);
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+    }
+    @media (max-width: 720px){
+      .row{ grid-template-columns: 1fr; }
+    }
+
+    label{ display:block; font-size:12px; opacity:.8; margin-bottom:6px; }
+    input, select, textarea{
+      width:100%;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(8,14,30,.55);
+      color:#e6edf7;
+      outline:none;
+    }
+    input:focus, select:focus, textarea:focus{
+      border-color: rgba(77,156,255,.55);
+      box-shadow: 0 0 0 3px rgba(77,156,255,.12);
+    }
+
+    .btn{
+      background:#1f3b6d;
+      color:#fff;
+      border:0;
+      padding:10px 14px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:600;
+    }
+    .btn:hover{ background:#2a4c88; }
+
+    .btn.secondary{
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.10);
+    }
+    .btn.secondary:hover{ background:rgba(255,255,255,.10); }
+
+    .pill{
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(255,255,255,.04);
+      font-size:12px;
+      opacity:.95;
+      margin-right:8px;
+      margin-bottom:8px;
+    }
+
+    .muted{ opacity:.7; }
+    .status{ margin-top:10px; font-size:13px; }
+    .status.ok{ color:#4ade80; }
+    .status.err{ color:#f87171; }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:10px;
+      font-size:14px;
+    }
+    thead th{
+      text-align:left;
+      padding:10px;
+      background:linear-gradient(180deg,rgba(40,64,110,.9),rgba(28,46,86,.9));
+      border-top-left-radius:12px;
+      border-top-right-radius:12px;
+    }
+    tbody td{
+      padding:10px;
+      border-top:1px solid rgba(255,255,255,.08);
+    }
+    tbody tr:nth-child(even){
+      background:rgba(10,18,35,.6);
+    }
+
+    details{
+      margin-top:10px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:10px 12px;
+      background:rgba(255,255,255,.03);
+    }
+    details summary{ cursor:pointer; font-weight:600; }
+
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      margin-bottom:10px;
+    }
+    .topbar .actions{
+      display:flex; gap:10px; flex-wrap:wrap;
+    }
+
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+
+<body>
+<div class="app">
+
+  <aside>
+    <div class="brand">Planta de Hormigón</div>
+    <div class="brand-sub">Control de producción & inventario</div>
+
+    <nav class="nav">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/registro">Registro diario</a>
+      <a href="/inventario">Inventario</a>
+      <a href="/historial">Historial</a>
+      <a href="/graficas">Gráficas</a>
+      <a href="/ml" class="active">Predicción ML</a>
+    </nav>
+
+    <div class="logout">
+      <button type="button">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div>
+        <h1>Predicción ML</h1>
+        <div class="subtitle">
+          API de Machine Learning (<span class="mono">/api/ml/info</span>, <span class="mono">/api/ml/predecir</span> y <span class="mono">/api/ml/predecir_batch</span>).
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn secondary" id="btnRefreshInfo" type="button">Actualizar info</button>
+      </div>
+    </div>
+
+    <div class="grid">
+
+      <!-- INFO DEL MODELO -->
+      <section class="card">
+        <h3 style="margin:0 0 10px;">Información del modelo</h3>
+
+        <div id="infoPills">
+          <span class="pill">Estado: <b id="infoEstado">Cargando…</b></span>
+        </div>
+
+        <div class="row" style="margin-top:6px;">
+          <div>
+            <label>Modelo</label>
+            <input id="infoModelo" disabled value="—"/>
+          </div>
+          <div>
+            <label>Rango de entrenamiento</label>
+            <input id="infoRango" disabled value="—"/>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <div>
+            <label>Targets</label>
+            <input id="infoTargets" disabled value="—"/>
+          </div>
+          <div>
+            <label>Features</label>
+            <input id="infoFeatures" disabled value="—"/>
+          </div>
+        </div>
+
+        <details>
+          <summary>Ver métricas</summary>
+          <div class="muted" style="margin-top:10px;">(Se muestra lo que devuelve <span class="mono">metricas</span>)</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Métrica</th>
+                <th>Valor</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyMetricas"></tbody>
+          </table>
+        </details>
+
+        <details>
+          <summary>Ver diseños disponibles</summary>
+          <div class="muted" style="margin-top:10px;">(Lista tomada de <span class="mono">disenos_disponibles</span>)</div>
+          <div id="disenosBox" style="margin-top:10px;"></div>
+        </details>
+
+        <div id="infoStatus" class="status muted"></div>
+      </section>
+
+      <!-- FORM + RESULTADOS -->
+      <section class="card">
+        <h3 style="margin:0 0 10px;">Generar predicción</h3>
+
+        <div class="row">
+          <div>
+            <label>Fecha (YYYY-MM-DD)</label>
+            <input id="fecha" type="date"/>
+          </div>
+          <div>
+            <label>Turno</label>
+            <select id="turno">
+              <option value="">Auto (Suma DIA+NOCHE)</option>
+              <option value="DIA">DIA</option>
+              <option value="NOCHE">NOCHE</option>
+              <option value="AMBOS">AMBOS</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <div>
+            <label>Diseño</label>
+            <select id="diseno">
+              <option value="OTROS">OTROS</option>
+            </select>
+          </div>
+          <div>
+            <label>Volumen (m³)</label>
+            <input id="volumen" type="number" min="0.01" step="0.01" value="6.0"/>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+          <button class="btn" id="btnPredecir" type="button">Predecir</button>
+          <button class="btn secondary" id="btnCopiarJson" type="button">Copiar JSON resultado</button>
+        </div>
+
+        <div id="predStatus" class="status muted"></div>
+
+        <div id="resultadoBox" style="margin-top:12px;">
+          <div class="muted">Aún no hay predicción.</div>
+        </div>
+
+        <details style="margin-top:14px;">
+          <summary>Batch (opcional): pegar JSON y predecir</summary>
+          <div class="muted" style="margin-top:10px;">
+            Formato:
+            <span class="mono">{ "predicciones": [ {"fecha":"2026-03-01","turno":"DIA","diseno":"H25","volumen":6}, ... ] }</span>
+          </div>
+          <textarea id="batchJson" rows="8" class="mono" style="margin-top:10px;"></textarea>
+          <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+            <button class="btn" id="btnPredecirBatch" type="button">Ejecutar batch</button>
+            <button class="btn secondary" id="btnCargarEjemplo" type="button">Cargar ejemplo</button>
+          </div>
+
+          <div id="batchStatus" class="status muted"></div>
+          <div id="batchOut" style="margin-top:10px;"></div>
+        </details>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script src="/static/js/ml_prediccion.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-# Importar librerías
+# app.py
 from flask import Flask, render_template, jsonify, request, Response
 import os
 import json
@@ -17,7 +17,6 @@ from utils.loaders import (
     obtener_historial_consumo,
 )
 
-
 from ml.predictor import predecir_batch, predecir_materiales, obtener_info_modelo
 
 
@@ -29,101 +28,17 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
 app.config["DATABASE"] = DB_PATH
-os.environ["DATABASE"] = DB_PATH  
 
 logging.basicConfig(level=logging.INFO)
 
 
 # -------------------------------------------------
-# Migración ligera de SQLite
+# Helpers DB (solo lectura / consultas simples)
 # -------------------------------------------------
-def _get_cols(conn, table):
-    cur = conn.cursor()
-    cur.execute(f"PRAGMA table_info({table})")
-    return [r[1] for r in cur.fetchall()]
-
-
-def _add_col(conn, table, col, coltype, default_sql=None):
-    cur = conn.cursor()
-    cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
-    if default_sql:
-        cur.execute(default_sql)
-    conn.commit()
-
-
-def ensure_db_schema():
-    """
-    Corrige los errores que estás viendo:
-    - table despachos has no column named cemento_he_kg
-    - no such column r.aditivo_rheo_sika115
-    """
-    if not os.path.exists(DB_PATH):
-        raise FileNotFoundError(f"No existe la base de datos en: {DB_PATH}")
-
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        # --- DESPACHOS
-        cols_d = _get_cols(conn, "despachos")
-
-        
-        if "cemento_he_kg" not in cols_d:
-            _add_col(
-                conn,
-                "despachos",
-                "cemento_he_kg",
-                "REAL",
-                "UPDATE despachos SET cemento_he_kg = COALESCE(cemento_kg, 0)",
-            )
-            logging.info("DB: agregado despachos.cemento_he_kg (backfill desde cemento_kg)")
-
-        if "cemento_ip_kg" not in cols_d:
-            _add_col(conn, "despachos", "cemento_ip_kg", "REAL", "UPDATE despachos SET cemento_ip_kg = 0")
-            logging.info("DB: agregado despachos.cemento_ip_kg")
-
-        # --- RECETAS
-        cols_r = _get_cols(conn, "recetas")
-
-        if "cemento_he_kg" not in cols_r:
-            _add_col(
-                conn,
-                "recetas",
-                "cemento_he_kg",
-                "REAL",
-                "UPDATE recetas SET cemento_he_kg = COALESCE(cemento_kg, 0)",
-            )
-            logging.info("DB: agregado recetas.cemento_he_kg (backfill desde cemento_kg)")
-
-        if "cemento_ip_kg" not in cols_r:
-            _add_col(conn, "recetas", "cemento_ip_kg", "REAL", "UPDATE recetas SET cemento_ip_kg = 0")
-            logging.info("DB: agregado recetas.cemento_ip_kg")
-
-        
-        if "aditivo_rheo_sika115" not in cols_r:
-            _add_col(
-                conn,
-                "recetas",
-                "aditivo_rheo_sika115",
-                "REAL",
-                "UPDATE recetas SET aditivo_rheo_sika115 = COALESCE(aditivo_a, 0)",
-            )
-            logging.info("DB: agregado recetas.aditivo_rheo_sika115 (backfill desde aditivo_a)")
-
-        if "aditivo_basf_sika200" not in cols_r:
-            _add_col(
-                conn,
-                "recetas",
-                "aditivo_basf_sika200",
-                "REAL",
-                "UPDATE recetas SET aditivo_basf_sika200 = COALESCE(aditivo_b, 0)",
-            )
-            logging.info("DB: agregado recetas.aditivo_basf_sika200 (backfill desde aditivo_b)")
-
-    finally:
-        conn.close()
-
-
-# Ejecutar migración al iniciar
-ensure_db_schema()
+def _db_connect():
+    conn = sqlite3.connect(app.config["DATABASE"])
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 # -------------------------
@@ -164,34 +79,53 @@ def graficas():
     return render_template("graficas.html")
 
 
+@app.route("/ml")
+def ml():
+    return render_template("ml_prediccion.html")
+
+
 # -------------------------
 # APIs
 # -------------------------
 @app.route("/api/dashboard")
 def api_dashboard():
-    consumo = consumo_diario()
-    registros_semanal, cantidad_registros_semanal = registros_ultima_semana()
+    """
+    Devuelve:
+    - consumo_diario (m3) de hoy
+    - registros_ultima_semana (lista)
+    - cantidad_registros_semana (int)
+    """
+    try:
+        consumo = consumo_diario(db_path=DB_PATH)
 
-    respuesta = {
-        "consumo_diario": consumo,
-        "registros_ultima_semana": registros_semanal,
-        "cantidad_registros_semana": cantidad_registros_semanal,
-    }
-    return Response(json.dumps(respuesta, ensure_ascii=False), mimetype="application/json")
+        registros_semanal, cantidad_registros_semanal = registros_ultima_semana(db_path=DB_PATH)
+
+        respuesta = {
+            "consumo_diario": consumo,
+            "registros_ultima_semana": registros_semanal,
+            "cantidad_registros_semana": cantidad_registros_semanal,
+        }
+        return Response(json.dumps(respuesta, ensure_ascii=False), mimetype="application/json")
+    except Exception as e:
+        logging.exception("Error en /api/dashboard")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/recetas")
 def api_recetas():
+    """
+    Lista diseños disponibles desde tabla recetas (codigo_diseno).
+    """
     try:
-        conn = sqlite3.connect(app.config["DATABASE"])
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        cur.execute("SELECT codigo_diseno FROM recetas ORDER BY codigo_diseno")
-        rows = cur.fetchall()
-        conn.close()
+        with _db_connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT codigo_diseno FROM recetas ORDER BY codigo_diseno")
+            rows = cur.fetchall()
+
         disenos = [r["codigo_diseno"] for r in rows if r["codigo_diseno"]]
         return jsonify({"ok": True, "disenos": disenos})
     except Exception as e:
+        logging.exception("Error en /api/recetas")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -206,7 +140,7 @@ def api_despachos():
         fecha = payload.get("fecha", "")
         volumen_m3 = payload.get("volumen_m3", 0)
         diseno_mezcla = payload.get("diseno_mezcla", "")
-        zona = payload.get("zona", "")
+        zona = payload.get("zona", "")          # lo que escribes en "Destino de la producción"
         wbs = payload.get("wbs", "")
         turno = payload.get("turno", "")
 
@@ -214,16 +148,18 @@ def api_despachos():
         asentamiento_final_cm = payload.get("asentamiento_final_cm", 0)
         temperatura_c = payload.get("temperatura_c", 0)
 
+        # OJO: insertar_despacho() recibe "destino", NO "zona".
         new_id = insertar_despacho(
             fecha=fecha,
             volumen=volumen_m3,
             diseno_mezcla=diseno_mezcla,
             wbs=wbs,
-            destino=zona,
+            destino=zona,  # <-- aquí se guarda en columna "zona" de tu BD
             turno=turno,
             humedad_arena=arena_humedad_pct,
             asentamiento_final=asentamiento_final_cm,
             temperatura=temperatura_c,
+            db_path=DB_PATH,
         )
 
         if not new_id:
@@ -232,6 +168,7 @@ def api_despachos():
         return jsonify({"ok": True, "id": new_id})
 
     except Exception as e:
+        logging.exception("Error en /api/despachos")
         return jsonify({"ok": False, "error": f"Error al insertar despacho: {e}"}), 500
 
 
@@ -254,11 +191,13 @@ def api_historial_consumo():
 
     try:
         filas = obtener_historial_consumo(
-            inicio, fin,
+            inicio,
+            fin,
             diseno=diseno,
             zona=zona,
             turno=turno,
             wbs=wbs,
+            db_path=DB_PATH,
         )
 
         bst = time.time() - t0
@@ -271,6 +210,7 @@ def api_historial_consumo():
         return Response(json.dumps(resp, ensure_ascii=False), mimetype="application/json")
 
     except Exception as e:
+        logging.exception("Error en /api/historial_consumo")
         return jsonify({"error": str(e)}), 500
 
 
@@ -288,14 +228,17 @@ def api_resumen_consumo():
 
     try:
         resumen = cruce_consumo_por_rango(
-            inicio, fin,
+            inicio,
+            fin,
             diseno=diseno,
             zona=zona,
             turno=turno,
             wbs=wbs,
+            db_path=DB_PATH,
         )
         return jsonify({"ok": True, "resumen": resumen})
     except Exception as e:
+        logging.exception("Error en /api/resumen_consumo")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -313,13 +256,16 @@ def api_alertas_consumo():
 
     try:
         resumen = cruce_consumo_por_rango(
-            inicio, fin,
+            inicio,
+            fin,
             diseno=diseno,
             zona=zona,
             turno=turno,
             wbs=wbs,
+            db_path=DB_PATH,
         )
-        filas, no_mapeados, no_encontrados = cruzar_consumo_vs_stock(resumen)
+
+        filas, no_mapeados, no_encontrados = cruzar_consumo_vs_stock(resumen, db_path=DB_PATH)
 
         return jsonify({
             "ok": True,
@@ -328,6 +274,7 @@ def api_alertas_consumo():
             "no_encontrados": no_encontrados,
         })
     except Exception as e:
+        logging.exception("Error en /api/alertas_consumo")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -351,12 +298,21 @@ def api_graficas():
     fin = request.args.get("fin")
     diseno = request.args.get("diseno") or None
     zona = request.args.get("zona") or None
+    turno = request.args.get("turno") or None
+    wbs = request.args.get("wbs") or None
 
     if not inicio or not fin:
         return jsonify({"ok": False, "error": "Debes enviar inicio y fin"}), 400
 
     try:
-        filas = obtener_historial_consumo(inicio, fin, diseno=diseno, zona=zona)
+        filas = obtener_historial_consumo(
+            inicio, fin,
+            diseno=diseno,
+            zona=zona,
+            turno=turno,
+            wbs=wbs,
+            db_path=DB_PATH,
+        )
 
         if not filas:
             return jsonify({"ok": True, "figs": {}, "num_registros": 0, "graficas_disponibles": []})
@@ -364,29 +320,38 @@ def api_graficas():
         df = pd.DataFrame(filas)
         df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
 
+        # 1) Volumen por día
         g1 = df.dropna(subset=["fecha"]).groupby(df["fecha"].dt.date)["volumen_m3"].sum().reset_index()
         fig_vol_dia = {
             "data": [{"type": "bar", "x": [str(x) for x in g1["fecha"]], "y": [float(v) for v in g1["volumen_m3"]]}],
             "layout": {"title": "Volumen por día (m³)", **_plotly_template_dark()},
         }
 
+        # 2) Volumen por diseño
         g2 = df.groupby("diseno_mezcla")["volumen_m3"].sum().reset_index().sort_values("volumen_m3", ascending=False)
         fig_vol_diseno = {
             "data": [{"type": "bar", "x": g2["diseno_mezcla"].tolist(), "y": [float(v) for v in g2["volumen_m3"]]}],
             "layout": {"title": "Volumen por diseño (m³)", **_plotly_template_dark()},
         }
 
-        resumen = cruce_consumo_por_rango(inicio, fin, diseno=diseno, zona=zona)
+        # 3) Consumo total por material (desde resumen)
+        resumen = cruce_consumo_por_rango(
+            inicio, fin,
+            diseno=diseno,
+            zona=zona,
+            turno=turno,
+            wbs=wbs,
+            db_path=DB_PATH,
+        )
 
         labels = [
-            "Arena (kg)", "Grava (kg)", "Cem HE (kg)", "Cem IP (kg)", "Agua (kg)",
+            "Arena (kg)", "Grava (kg)", "Cemento (kg)", "Agua (kg)",
             "Rheo + Sika115", "BASF + Sika200", "Delvo", "Glenium 7950", "Glenium 7970", "Fibras"
         ]
         values = [
             float(resumen.get("arena_kg", 0)),
             float(resumen.get("grava_kg", 0)),
-            float(resumen.get("cemento_he_kg", 0)),
-            float(resumen.get("cemento_ip_kg", 0)),
+            float(resumen.get("cemento_kg", 0)),
             float(resumen.get("agua_kg", 0)),
             float(resumen.get("aditivo_rheo_sika115", 0)),
             float(resumen.get("aditivo_basf_sika200", 0)),
@@ -407,9 +372,15 @@ def api_graficas():
             "volumen_por_diseno": fig_vol_diseno,
         }
 
-        return jsonify({"ok": True, "figs": figs, "num_registros": int(df.shape[0]), "graficas_disponibles": list(figs.keys())})
+        return jsonify({
+            "ok": True,
+            "figs": figs,
+            "num_registros": int(df.shape[0]),
+            "graficas_disponibles": list(figs.keys())
+        })
 
     except Exception as e:
+        logging.exception("Error en /api/graficas")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 

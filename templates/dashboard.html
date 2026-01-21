@@ -406,6 +406,17 @@
           </svg>
           Historial
         </a>
+
+        
+        <a href="/ml">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 19V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M4 19h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M7 15l3-4 3 2 4-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M18 7h2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          Predicción ML
+        </a>
       </nav>
 
       <div class="spacer"></div>
@@ -460,6 +471,17 @@
             </svg>
             Historial
           </a>
+
+          
+          <a class="pill" href="/ml" title="Predicción ML">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 19V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M4 19h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M7 15l3-4 3 2 4-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M18 7h2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            Predicción ML
+          </a>
         </div>
       </div>
 
@@ -504,9 +526,10 @@
               <thead>
                 <tr>
                   <th>Fecha</th>
-                  <th>Material</th>
-                  <th>Cantidad</th>
-                  <th>ID</th>
+                  <th>Diseño</th>
+                  <th>Volumen (m³)</th>
+                  <th>Zona</th>
+                  <th>WBS</th>
                 </tr>
               </thead>
               <tbody id="lastRows">
@@ -550,8 +573,6 @@
     </div>
   </div>
 
-  
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>
-

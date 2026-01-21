@@ -59,18 +59,17 @@
         <td>${r.turno ?? ""}</td>
         <td>${num(r.volumen_m3)}</td>
 
-        <td>${num(r.est_arena_kg)}</td>
-        <td>${num(r.est_grava_kg)}</td>
-        <td>${num(r.est_cemento_he_kg)}</td>
-        <td>${num(r.est_cemento_ip_kg)}</td>
-        <td>${num(r.est_agua_kg)}</td>
+        <td>${num(r.arena_kg)}</td>
+        <td>${num(r.grava_kg)}</td>
+        <td>${num(r.cemento_kg)}</td>
+        <td>${num(r.agua_kg)}</td>
 
-        <td>${num(r.est_aditivo_rheo_sika115)}</td>
-        <td>${num(r.est_aditivo_basf_sika200)}</td>
-        <td>${num(r.est_aditivo_delvo)}</td>
-        <td>${num(r.est_aditivo_glenium_7950)}</td>
-        <td>${num(r.est_aditivo_glenium_7970)}</td>
-        <td>${num(r.est_aditivo_fibras)}</td>
+        <td>${num(r.aditivo_rheo_sika115)}</td>
+        <td>${num(r.aditivo_basf_sika200)}</td>
+        <td>${num(r.aditivo_delvo)}</td>
+        <td>${num(r.aditivo_glenium_7950)}</td>
+        <td>${num(r.aditivo_glenium_7970)}</td>
+        <td>${num(r.aditivo_fibras)}</td>
 
         <td>${num(r.arena_humedad_pct)}</td>
         <td>${num(r.asentamiento_final_cm)}</td>
@@ -126,8 +125,7 @@
     const items = [
       ["Arena (kg)", resumen.arena_kg],
       ["Grava (kg)", resumen.grava_kg],
-      ["Cem HE (kg)", resumen.cemento_he_kg],
-      ["Cem IP (kg)", resumen.cemento_ip_kg],
+      ["Cemento (kg)", resumen.cemento_kg],
       ["Agua (kg)", resumen.agua_kg],
       ["Rheo+Sika115", resumen.aditivo_rheo_sika115],
       ["BASF+Sika200", resumen.aditivo_basf_sika200],
@@ -144,12 +142,7 @@
       grid.appendChild(div);
     });
 
-    if (resumen._errores && resumen._errores > 0) {
-      hint.textContent = `Nota: ${resumen._errores} registro(s) no pudieron calcular consumo (diseño sin receta).`;
-    } else {
-      hint.textContent = `Registros considerados: ${totalRegistros ?? 0}`;
-    }
-
+    hint.textContent = `Registros considerados: ${totalRegistros ?? 0}`;
     box.style.display = "block";
   }
 
@@ -200,7 +193,6 @@
     box.style.display = "block";
   }
 
-  // NUEVO: arma un link a /graficas conservando filtros actuales
   function actualizarLinkGraficas() {
     const btn = $("btnGraficas");
     if (!btn) return;
@@ -255,7 +247,6 @@
     const urlSum = `/api/resumen_consumo?${params.toString()}`;
     const urlAlert = `/api/alertas_consumo?${params.toString()}`;
 
-    // filas
     const resRows = await fetch(urlRows);
     const dataRows = await resRows.json().catch(() => ({}));
 
@@ -275,13 +266,11 @@
     renderRows(dataRows.datos || []);
     setMeta(dataRows.total || 0, dataRows.tiempos || null);
 
-    // resumen
     const resSum = await fetch(urlSum);
     const dataSum = await resSum.json().catch(() => ({}));
     if (resSum.ok && dataSum.ok) renderSummary(dataSum.resumen, dataSum.total_registros);
     else renderSummary(null, 0);
 
-    // alertas
     const resAlert = await fetch(urlAlert);
     const dataAlert = await resAlert.json().catch(() => ({}));
     if (resAlert.ok && dataAlert.ok) renderAlertas(dataAlert);
@@ -313,7 +302,6 @@
     if (form) {
       form.addEventListener("submit", buscarConConsumoYAlertas);
 
-      // NUEVO: cada vez que cambian filtros, actualiza el href del boton Graficas
       ["inicio", "fin", "diseno", "zona", "turno", "wbs"].forEach((id) => {
         const el = $(id);
         if (!el) return;
@@ -321,11 +309,9 @@
         el.addEventListener("input", actualizarLinkGraficas);
       });
 
-      // primera carga
       actualizarLinkGraficas();
       form.dispatchEvent(new Event("submit"));
     } else {
-      // si no hay form, al menos setea el link
       actualizarLinkGraficas();
     }
   });
