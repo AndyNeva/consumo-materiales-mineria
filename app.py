@@ -5,18 +5,17 @@ import json
 import time
 import sqlite3
 import logging
-
 import pandas as pd
-
 from utils.loaders import (
     consumo_diario,
     registros_ultima_semana,
     insertar_despacho,
     cruce_consumo_por_rango,
     cruzar_consumo_vs_stock,
-    obtener_historial_consumo,
-)
-
+    _receta_por_diseno,
+    _calc_consumos_estimados,
+    _connect)
+from ed.busquedas import buscar_por_rango, busqueda_diseno_destino
 from ml.predictor import predecir_batch, predecir_materiales, obtener_info_modelo
 
 
@@ -97,13 +96,23 @@ def api_dashboard():
     """
     try:
         consumo = consumo_diario(db_path=DB_PATH)
-
         registros_semanal, cantidad_registros_semanal = registros_ultima_semana(db_path=DB_PATH)
+
+        # Obtener inventario real desde la tabla materiales
+        with _db_connect() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT nombre AS material, unidad, stock_actual AS stock, stock_minimo AS minimo
+                FROM materiales
+                ORDER BY nombre
+            """)
+            inventario = [dict(r) for r in cur.fetchall()]
 
         respuesta = {
             "consumo_diario": consumo,
             "registros_ultima_semana": registros_semanal,
             "cantidad_registros_semana": cantidad_registros_semanal,
+            "inventario": inventario,
         }
         return Response(json.dumps(respuesta, ensure_ascii=False), mimetype="application/json")
     except Exception as e:
@@ -177,8 +186,6 @@ def api_despachos():
 # -------------------------
 @app.route("/api/historial_consumo")
 def api_historial_consumo():
-    t0 = time.time()
-
     inicio = request.args.get("inicio")
     fin = request.args.get("fin")
     diseno = request.args.get("diseno") or None
@@ -190,21 +197,18 @@ def api_historial_consumo():
         return jsonify({"error": "Debes enviar 'inicio' y 'fin'."}), 400
 
     try:
-        filas = obtener_historial_consumo(
-            inicio,
-            fin,
-            diseno=diseno,
-            zona=zona,
-            turno=turno,
-            wbs=wbs,
-            db_path=DB_PATH,
-        )
+        # Usar búsqueda con BST/AVL
+        filas, tiempo_bst, tiempo_avl = buscar_por_rango(inicio, fin)
+        
+        # Aplicar filtros adicionales si se especificaron
+        if diseno or zona or turno or wbs:
+            filas = busqueda_diseno_destino(filas, diseno=diseno, destino=zona, turno=turno, wbs=wbs)
 
-        bst = time.time() - t0
-
+        # Ordenar por fecha ASC y id ASC antes de devolver
+        filas.sort(key=lambda x: (x.get("fecha", ""), x.get("id", 0)))
         resp = {
             "datos": filas,
-            "tiempos": {"bst": round(bst, 6), "avl": 0.0},
+            "tiempos": {"bst": round(tiempo_bst, 6), "avl": round(tiempo_avl, 6)},
             "total": len(filas),
         }
         return Response(json.dumps(resp, ensure_ascii=False), mimetype="application/json")
@@ -212,6 +216,66 @@ def api_historial_consumo():
     except Exception as e:
         logging.exception("Error en /api/historial_consumo")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/materiales", methods=["GET", "POST"])
+def api_materiales():
+    """Gestiona inventario de materiales."""
+    if request.method == "GET":
+        try:
+            with _db_connect() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT id, nombre, unidad, stock_actual, stock_minimo, stock_maximo
+                    FROM materiales
+                    ORDER BY nombre
+                """)
+                materiales = [dict(r) for r in cur.fetchall()]
+            return jsonify({"ok": True, "materiales": materiales})
+        except Exception as e:
+            logging.exception("Error en GET /api/materiales")
+            return jsonify({"ok": False, "error": str(e)}), 500
+    
+    # POST: actualizar stock de un material
+    try:
+        payload = request.get_json(force=True) or {}
+        material_id = payload.get("id")
+        stock_actual = payload.get("stock_actual")
+        stock_minimo = payload.get("stock_minimo")
+        
+        if not material_id:
+            return jsonify({"ok": False, "error": "Falta el ID del material"}), 400
+        
+        with _db_connect() as conn:
+            updates = []
+            params = []
+            
+            if stock_actual is not None:
+                updates.append("stock_actual = ?")
+                params.append(float(stock_actual))
+            
+            if stock_minimo is not None:
+                updates.append("stock_minimo = ?")
+                params.append(float(stock_minimo))
+            
+            if not updates:
+                return jsonify({"ok": False, "error": "No hay datos para actualizar"}), 400
+            
+            params.append(material_id)
+            sql = f"UPDATE materiales SET {', '.join(updates)} WHERE id = ?"
+            
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            conn.commit()
+            
+            if cur.rowcount == 0:
+                return jsonify({"ok": False, "error": "Material no encontrado"}), 404
+        
+        return jsonify({"ok": True, "mensaje": "Material actualizado"})
+    
+    except Exception as e:
+        logging.exception("Error en POST /api/materiales")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/resumen_consumo")
@@ -242,42 +306,6 @@ def api_resumen_consumo():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-@app.route("/api/alertas_consumo")
-def api_alertas_consumo():
-    inicio = request.args.get("inicio")
-    fin = request.args.get("fin")
-    diseno = request.args.get("diseno") or None
-    zona = request.args.get("zona") or None
-    turno = request.args.get("turno") or None
-    wbs = request.args.get("wbs") or None
-
-    if not inicio or not fin:
-        return jsonify({"ok": False, "error": "Debes enviar inicio y fin"}), 400
-
-    try:
-        resumen = cruce_consumo_por_rango(
-            inicio,
-            fin,
-            diseno=diseno,
-            zona=zona,
-            turno=turno,
-            wbs=wbs,
-            db_path=DB_PATH,
-        )
-
-        filas, no_mapeados, no_encontrados = cruzar_consumo_vs_stock(resumen, db_path=DB_PATH)
-
-        return jsonify({
-            "ok": True,
-            "filas": filas,
-            "no_mapeados": no_mapeados,
-            "no_encontrados": no_encontrados,
-        })
-    except Exception as e:
-        logging.exception("Error en /api/alertas_consumo")
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
 # -------------------------
 # Gráficas (Plotly)
 # -------------------------
@@ -305,36 +333,29 @@ def api_graficas():
         return jsonify({"ok": False, "error": "Debes enviar inicio y fin"}), 400
 
     try:
-        filas = obtener_historial_consumo(
-            inicio, fin,
-            diseno=diseno,
-            zona=zona,
-            turno=turno,
-            wbs=wbs,
-            db_path=DB_PATH,
-        )
-
+        # Usar búsqueda con BST/AVL
+        filas, _, _ = buscar_por_rango(inicio, fin)
+        # Aplicar filtros adicionales si se especificaron
+        if diseno or zona or turno or wbs:
+            filas = busqueda_diseno_destino(filas, diseno=diseno, destino=zona, turno=turno, wbs=wbs)
         if not filas:
             return jsonify({"ok": True, "figs": {}, "num_registros": 0, "graficas_disponibles": []})
-
         df = pd.DataFrame(filas)
         df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-
         # 1) Volumen por día
         g1 = df.dropna(subset=["fecha"]).groupby(df["fecha"].dt.date)["volumen_m3"].sum().reset_index()
         fig_vol_dia = {
             "data": [{"type": "bar", "x": [str(x) for x in g1["fecha"]], "y": [float(v) for v in g1["volumen_m3"]]}],
             "layout": {"title": "Volumen por día (m³)", **_plotly_template_dark()},
         }
-
         # 2) Volumen por diseño
-        g2 = df.groupby("diseno_mezcla")["volumen_m3"].sum().reset_index().sort_values("volumen_m3", ascending=False)
+        g2 = df.groupby("diseno")["volumen_m3"].sum().reset_index().sort_values("volumen_m3", ascending=False)
         fig_vol_diseno = {
-            "data": [{"type": "bar", "x": g2["diseno_mezcla"].tolist(), "y": [float(v) for v in g2["volumen_m3"]]}],
+            "data": [{"type": "bar", "x": g2["diseno"].tolist(), "y": [float(v) for v in g2["volumen_m3"]]}],
             "layout": {"title": "Volumen por diseño (m³)", **_plotly_template_dark()},
         }
+        # 3) Consumo total por material (usando cruce_consumo_por_rango si existe)
 
-        # 3) Consumo total por material (desde resumen)
         resumen = cruce_consumo_por_rango(
             inicio, fin,
             diseno=diseno,
@@ -343,7 +364,6 @@ def api_graficas():
             wbs=wbs,
             db_path=DB_PATH,
         )
-
         labels = [
             "Arena (kg)", "Grava (kg)", "Cemento (kg)", "Agua (kg)",
             "Rheo + Sika115", "BASF + Sika200", "Delvo", "Glenium 7950", "Glenium 7970", "Fibras"
@@ -360,25 +380,21 @@ def api_graficas():
             float(resumen.get("aditivo_glenium_7970", 0)),
             float(resumen.get("aditivo_fibras", 0)),
         ]
-
         fig_consumo_mat = {
             "data": [{"type": "bar", "x": labels, "y": values}],
             "layout": {"title": "Consumo total estimado por material", **_plotly_template_dark()},
         }
-
         figs = {
             "volumen_por_dia": fig_vol_dia,
             "consumo_por_material": fig_consumo_mat,
             "volumen_por_diseno": fig_vol_diseno,
         }
-
         return jsonify({
             "ok": True,
             "figs": figs,
             "num_registros": int(df.shape[0]),
             "graficas_disponibles": list(figs.keys())
         })
-
     except Exception as e:
         logging.exception("Error en /api/graficas")
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -448,6 +464,36 @@ def api_ml_predecir_batch():
         return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
     except Exception as e:
         return jsonify({"error": f"Error en predicción batch: {str(e)}"}), 500
+
+
+@app.route("/api/cruce_consumo_registro", methods=["POST"])
+def api_cruce_consumo_registro():
+    """
+    Recibe los mismos datos que el registro de despacho y retorna el cruce consumo vs stock para esa fila.
+    """
+    try:
+        data = request.get_json(force=True)
+        logging.warning(f"Payload recibido en cruce_consumo_registro: {data}")
+        if not data:
+            return jsonify({"ok": False, "error": "No se recibieron datos"}), 400
+        diseno = data.get("diseno_mezcla")
+        volumen = data.get("volumen_m3")
+        logging.warning(f"diseno_mezcla: {diseno}, volumen_m3: {volumen} (type: {type(volumen)})")
+        if not diseno or not volumen:
+            return jsonify({"ok": False, "error": "Faltan diseno_mezcla o volumen"}), 400
+        with _connect(DB_PATH) as conn:
+            receta = _receta_por_diseno(conn, diseno)
+            logging.warning(f"Receta obtenida: {receta}")
+            if receta is None:
+                return jsonify({"ok": False, "error": f"No existe receta para {diseno}"}), 400
+            consumos = _calc_consumos_estimados(receta, float(volumen))
+            logging.warning(f"Consumos calculados: {consumos}")
+        out, no_mapeados, no_encontrados = cruzar_consumo_vs_stock(consumos)
+        logging.warning(f"OUT cruce consumo vs stock: {out}")
+        return jsonify({"ok": True, "datos": out, "no_mapeados": no_mapeados, "no_encontrados": no_encontrados})
+    except Exception as e:
+        logging.exception("Error en cruce_consumo_registro")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 if __name__ == "__main__":

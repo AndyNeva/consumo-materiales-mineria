@@ -1,3 +1,4 @@
+
 # utils/loaders.py
 from __future__ import annotations
 
@@ -72,8 +73,8 @@ def _calc_consumos_estimados(receta: sqlite3.Row, volumen_m3: float) -> Dict[str
     agua = _safe_float(_row_value(receta, "agua_kg", 0.0)) * volumen_m3
     cemento = _safe_float(_row_value(receta, "cemento_kg", 0.0)) * volumen_m3
 
-    rheo = _safe_float(_row_value(receta, "aditivo_rheo_sika115", 0.0)) * volumen_m3
-    basf = _safe_float(_row_value(receta, "aditivo_basf_sika200", 0.0)) * volumen_m3
+    rheo = _safe_float(_row_value(receta, "aditivo_a", 0.0)) * volumen_m3
+    basf = _safe_float(_row_value(receta, "aditivo_b", 0.0)) * volumen_m3
     delvo = _safe_float(_row_value(receta, "aditivo_delvo", 0.0)) * volumen_m3
     gl7950 = _safe_float(_row_value(receta, "aditivo_glenium_7950", 0.0)) * volumen_m3
     gl7970 = _safe_float(_row_value(receta, "aditivo_glenium_7970", 0.0)) * volumen_m3
@@ -110,6 +111,46 @@ def _compat_front_from_row(d: Dict[str, Any]) -> Dict[str, Any]:
     d["est_aditivo_fibras"] = d.get("aditivo_fibras")
 
     return d
+
+
+def cargar_datos_tabla(tabla: str, db_path: str = DB_PATH) -> List[Dict[str, Any]]:
+    """Carga todos los registros de una tabla desde la base de datos."""
+    with _connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute(f"SELECT * FROM {tabla}")
+        return [dict(r) for r in cur.fetchall()]
+
+
+def convertir_formato_historial(registros: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Convierte registros de BD al formato esperado por historial.js.
+    Mapea campos de DB a nombres esperados por el frontend.
+    """
+    out = []
+    for r in registros:
+        out.append({
+            "id": r.get("id"),
+            "fecha": r.get("fecha"),
+            "diseno": r.get("diseno_mezcla"),
+            "zona": r.get("zona"),
+            "wbs": r.get("wbs"),
+            "turno": r.get("turno"),
+            "volumen_m3": float(r.get("volumen_m3") or 0),
+                "arena_kg": float(r.get("arena_kg") or 0),
+                "grava_kg": float(r.get("grava_kg") or 0),
+                "cemento_kg": float(r.get("cemento_kg") or 0),
+                "agua_kg": float(r.get("agua_kg") or 0),
+                "aditivo_rheo_sika115": float(r.get("aditivo_rheo_sika115") or 0),
+                "aditivo_basf_sika200": float(r.get("aditivo_basf_sika200") or 0),
+                "aditivo_delvo": float(r.get("aditivo_delvo") or 0),
+                "aditivo_glenium_7950": float(r.get("aditivo_glenium_7950") or 0),
+                "aditivo_glenium_7970": float(r.get("aditivo_glenium_7970") or 0),
+                "aditivo_fibras": float(r.get("aditivo_fibras") or 0),
+                "arena_humedad_pct": float(r.get("arena_humedad_pct") or 0),
+                "asentamiento_final_cm": float(r.get("asentamiento_final_cm") or 0),
+                "temperatura_c": float(r.get("temperatura_c") or 0),
+        })
+    return out
 
 
 # -------------------------
@@ -202,7 +243,35 @@ def insertar_despacho(
 
         cur = conn.execute(sql, tuple(data.values()))
         conn.commit()
-        return int(cur.lastrowid)
+        last_id = int(cur.lastrowid)
+
+        # Descontar stock de materiales
+        # Mapeo: campo de consumo -> nombre en materiales
+        consumo_to_material = {
+            "arena_kg": "Arena",
+            "grava_kg": "Grava",
+            "cemento_kg": "Cemento",
+            "agua_kg": "Agua",
+            "aditivo_rheo_sika115": "RHEO 1000",
+            "aditivo_basf_sika200": "BASF 719",
+            "aditivo_delvo": "Delvo",
+            "aditivo_glenium_7950": "Glenium 7950",
+            "aditivo_glenium_7970": "Glenium 7970",
+            "aditivo_fibras": "Fibras",
+        }
+        for campo, nombre in consumo_to_material.items():
+            cantidad = est.get(campo, 0.0)
+            if cantidad == 0:
+                continue
+            # Buscar material
+            cur2 = conn.execute("SELECT stock_actual FROM materiales WHERE LOWER(nombre)=LOWER(?) LIMIT 1", (nombre,))
+            row = cur2.fetchone()
+            if row is not None:
+                stock_actual = float(row["stock_actual"] or 0)
+                nuevo_stock = stock_actual - cantidad
+                conn.execute("UPDATE materiales SET stock_actual = ? WHERE LOWER(nombre)=LOWER(?)", (nuevo_stock, nombre))
+        conn.commit()
+        return last_id
 
 
 # -------------------------
@@ -255,8 +324,7 @@ def obtener_historial_consumo(
 
         out: List[Dict[str, Any]] = []
         for r in cur.fetchall():
-            d = dict(r)
-            out.append(_compat_front_from_row(d))
+            out.append(dict(r))
         return out
 
 
@@ -311,8 +379,8 @@ def cruzar_consumo_vs_stock(
         ("grava_kg", "Grava", "kg"),
         ("cemento_kg", "Cemento", "kg"),
         ("agua_kg", "Agua", "kg"),
-        ("aditivo_rheo_sika115", "Rheo+Sika115", "kg"),
-        ("aditivo_basf_sika200", "BASF+Sika200", "kg"),
+        ("aditivo_rheo_sika115", "RHEO 1000", "kg"),
+        ("aditivo_basf_sika200", "BASF 719", "kg"),
         ("aditivo_delvo", "Delvo", "l"),
         ("aditivo_glenium_7950", "Glenium 7950", "l"),
         ("aditivo_glenium_7970", "Glenium 7970", "l"),
@@ -327,8 +395,8 @@ def cruzar_consumo_vs_stock(
         mat_cols = _table_columns(conn, "materiales")
 
         # Candidatos típicos (por si tu tabla usa otros nombres)
-        stock_col = _first_existing_column(mat_cols, ["stock_actual", "stock", "existencia", "saldo", "cantidad"])
-        min_col = _first_existing_column(mat_cols, ["stock_minimo", "minimo", "stock_min", "min"])
+        stock_col = "stock_actual"
+        min_col = "stock_minimo"
 
         for campo, nombre, unidad in mapa:
             consumo = _safe_float(resumen.get(campo))
@@ -343,11 +411,11 @@ def cruzar_consumo_vs_stock(
                 stock = _safe_float(_row_value(mat, stock_col, 0.0)) if stock_col else 0.0
                 minimo = _safe_float(_row_value(mat, min_col, 0.0)) if min_col else 0.0
 
-            deficit = max(consumo - stock, 0.0)
+            saldo = stock - consumo
             bajo_minimo = (stock < minimo) if minimo > 0 else False
 
             estado = "OK"
-            if deficit > 0:
+            if saldo < 0:
                 estado = "Deficit"
             elif bajo_minimo:
                 estado = "Bajo minimo"
@@ -358,7 +426,7 @@ def cruzar_consumo_vs_stock(
                 "stock_actual": stock,
                 "minimo": minimo,
                 "consumo_estimado": consumo,
-                "deficit_sugerido": deficit,
+                "saldo": saldo,
                 "bajo_minimo": bajo_minimo,
                 "estado": estado,
             })
@@ -371,3 +439,72 @@ def cruzar_consumo_vs_stock(
             no_mapeados.append(k)
 
     return out, no_mapeados, no_encontrados
+
+
+def cruce_consumo_vs_stock_fila(
+    fila: dict,
+    db_path: str = DB_PATH
+) -> tuple[list[dict], list[str], list[str]]:
+    """
+    Realiza el cruce consumo vs stock para una sola fila de información (registro diario).
+    La fila debe tener los campos de consumo: arena_kg, grava_kg, cemento_kg, agua_kg, aditivo_*, etc.
+    Devuelve la misma estructura que cruce_consumo_vs_stock.
+    """
+    mapa = [
+        ("arena_kg", "Arena", "kg"),
+        ("grava_kg", "Grava", "kg"),
+        ("cemento_kg", "Cemento", "kg"),
+        ("agua_kg", "Agua", "kg"),
+        ("aditivo_rheo_sika115", "Rheo+Sika115", "kg"),
+        ("aditivo_basf_sika200", "BASF+Sika200", "kg"),
+        ("aditivo_delvo", "Delvo", "l"),
+        ("aditivo_glenium_7950", "Glenium 7950", "l"),
+        ("aditivo_glenium_7970", "Glenium 7970", "l"),
+        ("aditivo_fibras", "Fibras", "kg"),
+    ]
+
+    no_mapeados: list[str] = []
+    no_encontrados: list[str] = []
+    out: list[dict] = []
+
+    with _connect(db_path) as conn:
+        mat_cols = _table_columns(conn, "materiales")
+        stock_col = _first_existing_column(mat_cols, ["stock_actual", "stock", "existencia", "saldo", "cantidad"])
+        min_col = _first_existing_column(mat_cols, ["stock_minimo", "minimo", "stock_min", "min"])
+
+        for campo, nombre, unidad in mapa:
+            consumo = _safe_float(fila.get(campo))
+            mat = _material_row_by_nombre(conn, nombre)
+            if not mat:
+                if consumo > 0:
+                    no_encontrados.append(nombre)
+                stock = 0.0
+                minimo = 0.0
+            else:
+                stock = _safe_float(_row_value(mat, stock_col, 0.0)) if stock_col else 0.0
+                minimo = _safe_float(_row_value(mat, min_col, 0.0)) if min_col else 0.0
+            deficit = max(consumo - stock, 0.0)
+            bajo_minimo = (stock < minimo) if minimo > 0 else False
+            estado = "OK"
+            if deficit > 0:
+                estado = "Deficit"
+            elif bajo_minimo:
+                estado = "Bajo minimo"
+            out.append({
+                "material": nombre,
+                "unidad": unidad,
+                "stock_actual": stock,
+                "minimo": minimo,
+                "consumo_estimado": consumo,
+                "deficit_sugerido": deficit,
+                "bajo_minimo": bajo_minimo,
+                "estado": estado,
+            })
+    mapa_keys = {x[0] for x in mapa}
+    for k, v in (fila or {}).items():
+        if k in ("registros", "volumen_m3"):
+            continue
+        if (k.endswith("_kg") or k.startswith("aditivo_")) and k not in mapa_keys and _safe_float(v) != 0:
+            no_mapeados.append(k)
+    return out, no_mapeados, no_encontrados
+

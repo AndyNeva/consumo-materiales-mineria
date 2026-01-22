@@ -53,7 +53,7 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${r.fecha ?? ""}</td>
-        <td>${r.diseno_mezcla ?? ""}</td>
+        <td>${r.diseno ?? ""}</td>
         <td>${r.zona ?? ""}</td>
         <td>${r.wbs ?? ""}</td>
         <td>${r.turno ?? ""}</td>

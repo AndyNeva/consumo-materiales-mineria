@@ -144,34 +144,6 @@
     }
     .sum-card .k{font-size:11px;color:var(--muted);font-family:var(--mono)}
     .sum-card .v{font-size:14px;margin-top:4px;font-weight:800}
-
-    .alerts{
-      margin-top:14px;
-      border:1px solid var(--border);
-      border-radius: var(--radius2);
-      padding:12px;
-      background: rgba(255,255,255,.03);
-    }
-    .alerts h3{margin:0 0 10px;font-size:14px}
-    .alerts .sub{margin:0 0 10px;color:var(--muted);font-size:12px}
-    .alerts-table{width:100%;border-collapse:collapse;min-width:980px}
-    .alerts-table th, .alerts-table td{
-      padding:10px 12px;
-      border-bottom:1px solid rgba(255,255,255,.06);
-      font-size:13px;
-      white-space:nowrap;
-    }
-    .tag{
-      font-size:11px;
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.03);
-      font-family: var(--mono);
-    }
-    .tag.bad{border-color:rgba(239,68,68,.45); background: rgba(239,68,68,.10)}
-    .tag.warn{border-color:rgba(245,158,11,.45); background: rgba(245,158,11,.10)}
-    .tag.good{border-color:rgba(34,197,94,.45); background: rgba(34,197,94,.10)}
   </style>
 </head>
 <body>
@@ -236,7 +208,7 @@
             </div>
 
             <div class="field" style="flex:0 0 220px; align-self:flex-end;">
-              <button class="btn primary" type="submit">Buscar + Consumo + Alertas</button>
+              <button class="btn primary" type="submit">Buscar + Consumo</button>
             </div>
 
             
@@ -256,28 +228,6 @@
             <h3>Resumen consumo estimado (rango filtrado)</h3>
             <div class="summary-grid" id="summaryGrid"></div>
             <div class="hint" id="summaryHint"></div>
-          </div>
-
-          <div class="alerts" id="alertsBox" style="display:none;">
-            <h3>Cruce consumo vs stock</h3>
-            <p class="sub">Déficit sugerido = max(consumo_estimado - stock_actual, 0). “Bajo mínimo” compara stock_actual vs mínimo configurado del material.</p>
-            <div class="table-wrap" style="margin-top:10px;">
-              <table class="alerts-table">
-                <thead>
-                  <tr>
-                    <th>Material</th>
-                    <th>Unidad</th>
-                    <th>Stock actual</th>
-                    <th>Mínimo</th>
-                    <th>Consumo estimado</th>
-                    <th>Déficit sugerido</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody id="tbodyAlertas"></tbody>
-              </table>
-            </div>
-            <div class="hint" id="alertsHint"></div>
           </div>
 
           <div class="table-wrap" aria-label="Tabla de historial">

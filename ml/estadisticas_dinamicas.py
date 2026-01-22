@@ -200,3 +200,14 @@ def generar_graficos_dinamicos(df, chart_name=None):
     Redirige a generar_graficas_desde_datos.
     """
     return generar_graficas_desde_datos(df, chart_name=chart_name)
+
+
+def _plotly_template_dark():
+    return {
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+        "font": {"color": "rgba(255,255,255,.92)"},
+        "xaxis": {"gridcolor": "rgba(255,255,255,.08)", "zerolinecolor": "rgba(255,255,255,.10)"},
+        "yaxis": {"gridcolor": "rgba(255,255,255,.08)", "zerolinecolor": "rgba(255,255,255,.10)"},
+        "margin": {"l": 40, "r": 20, "t": 40, "b": 40},
+    }

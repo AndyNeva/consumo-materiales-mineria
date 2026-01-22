@@ -177,31 +177,29 @@ tbody tr:nth-child(even){
 </div>
 
 <script>
+"use strict";
 
-const KEY = "ph_inventario";
-
-const PRELOAD = [
- {material:"RHEO 1000",unidad:"kg",stock:981.64,minimo:500},
- {material:"Sika 115",unidad:"kg",stock:800,minimo:300},
- {material:"BASF 719",unidad:"kg",stock:582.64,minimo:250},
- {material:"Sika 200",unidad:"kg",stock:700,minimo:300},
- {material:"Delvo",unidad:"litros",stock:112.82,minimo:50},
- {material:"MasterGlenium 7950",unidad:"kg",stock:381.02,minimo:150},
- {material:"MasterGlenium 7970",unidad:"kg",stock:400,minimo:150},
- {material:"Sika PP 48 - BARCHIP",unidad:"kg",stock:200,minimo:80},
- {material:"Cemento HE",unidad:"kg",stock:1823,minimo:10000},
- {material:"Cemento IP",unidad:"kg",stock:0,minimo:0},
- {material:"Agua",unidad:"kg",stock:999999548.56,minimo:100},
- {material:"Arena",unidad:"kg",stock:13108,minimo:1600},
- {material:"Grava",unidad:"kg",stock:8200,minimo:820}
-];
-
-let data = JSON.parse(localStorage.getItem(KEY)) || PRELOAD;
-localStorage.setItem(KEY, JSON.stringify(data));
+let data = [];
 
 function estado(it){
-  if(Number(it.stock) <= Number(it.minimo)) return {t:"Bajo",c:"low"};
+  if(Number(it.stock_actual) <= Number(it.stock_minimo)) return {t:"Bajo",c:"low"};
   return {t:"OK",c:"ok"};
+}
+
+async function cargarMateriales(){
+  try {
+    const res = await fetch("/api/materiales");
+    const json = await res.json();
+    if(json.ok){
+      data = json.materiales;
+      render();
+    } else {
+      alert("Error al cargar materiales: " + (json.error || ""));
+    }
+  } catch(err){
+    console.error(err);
+    alert("Error de red al cargar materiales");
+  }
 }
 
 function render(){
@@ -211,28 +209,49 @@ function render(){
     const e=estado(it);
     tb.innerHTML+=`
       <tr>
-        <td>${it.material}</td>
+        <td>${it.nombre}</td>
         <td>${it.unidad}</td>
-        <td>${it.stock}</td>
-        <td>${it.minimo}</td>
+        <td>${it.stock_actual}</td>
+        <td>${it.stock_minimo}</td>
         <td><span class="badge ${e.c}">${e.t}</span></td>
         <td><button class="btn" onclick="edit(${i})">Editar</button></td>
       </tr>`;
   });
 }
 
-function edit(i){
-  const s=prompt("Nuevo stock:",data[i].stock);
-  const m=prompt("Nuevo mínimo:",data[i].minimo);
-  if(s!==null && m!==null){
-    data[i].stock=Number(s);
-    data[i].minimo=Number(m);
-    localStorage.setItem(KEY,JSON.stringify(data));
-    render();
+async function edit(i){
+  const material = data[i];
+  const s=prompt("Nuevo stock:",material.stock_actual);
+  const m=prompt("Nuevo mínimo:",material.stock_minimo);
+  
+  if(s===null || m===null) return;
+  
+  try {
+    const res = await fetch("/api/materiales", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        id: material.id,
+        stock_actual: Number(s),
+        stock_minimo: Number(m)
+      })
+    });
+    
+    const json = await res.json();
+    if(json.ok){
+      // Recargar datos
+      await cargarMateriales();
+    } else {
+      alert("Error al actualizar: " + (json.error || ""));
+    }
+  } catch(err){
+    console.error(err);
+    alert("Error de red al actualizar");
   }
 }
 
-render();
+// Cargar al iniciar
+cargarMateriales();
 </script>
 </body>
 </html>

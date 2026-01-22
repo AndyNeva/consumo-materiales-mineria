@@ -88,6 +88,7 @@
       consumo_diario: Number(data.consumo_diario) || 0,
       registros_ultima_semana: Array.isArray(data.registros_ultima_semana) ? data.registros_ultima_semana : [],
       cantidad_registros_semana: Number(data.cantidad_registros_semana) || 0,
+      inventario: Array.isArray(data.inventario) ? data.inventario : [],
     };
   }
 
@@ -162,8 +163,8 @@
   }
 
   function renderInventarioAlerts() {
-    ensureDefaultsInventario();
-    const inv = safeJsonParse(localStorage.getItem(LS_INV), []);
+    // Usar inventario real del backend (inyectado en window._dashboardInventario)
+    const inv = window._dashboardInventario || [];
 
     const alerts = inv
       .map(x => {
@@ -221,11 +222,14 @@
   async function init() {
     renderSession();
     wireLogout();
-    renderInventarioAlerts();
 
     try {
       const payload = await fetchDashboard();
       console.log("API /api/dashboard =>", payload);
+
+      // Inyectar inventario real para renderInventarioAlerts
+      window._dashboardInventario = payload.inventario || [];
+      renderInventarioAlerts();
 
       renderKPIs(payload);
       renderLastRows(payload);

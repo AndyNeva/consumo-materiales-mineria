@@ -452,8 +452,33 @@
 
             <div class="row" style="justify-content:flex-end; margin-top:14px;">
               <button class="btn" type="submit">Guardar registro</button>
+              <button class="btn primary" type="button" id="btnCruceConsumo">Cruce consumo vs stock</button>
             </div>
           </form>
+        </div>
+
+        <!-- ALERTAS/CRUCE CONSUMO VS STOCK -->
+        <div class="alerts" id="alertsBox" style="display:none; margin-top:24px;">
+          <div id="alertaDeficit" class="hint" style="display:none;color:var(--bad);font-weight:600;margin-bottom:10px;"></div>
+          <h3>Cruce consumo vs stock</h3>
+          <p class="sub">Déficit sugerido = max(consumo_estimado - stock_actual, 0). “Bajo mínimo” compara stock_actual vs mínimo configurado del material.</p>
+          <div class="table-wrap" style="margin-top:10px;">
+            <table class="alerts-table">
+              <thead>
+                <tr>
+                  <th>Material</th>
+                  <th>Unidad</th>
+                  <th>Stock actual</th>
+                  <th>Mínimo</th>
+                  <th>Consumo estimado</th>
+                  <th>Saldo</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyAlertas"></tbody>
+            </table>
+          </div>
+          <div class="hint" id="alertsHint"></div>
         </div>
       </div>
     </main>
