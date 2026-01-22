@@ -15,6 +15,7 @@ from utils.loaders import (
     _receta_por_diseno,
     _calc_consumos_estimados,
     _connect)
+from ml.graficas import graficas_dinamicas
 from ed.busquedas import buscar_por_rango, busqueda_diseno_destino
 from ml.predictor import predecir_batch, predecir_materiales, obtener_info_modelo
 
@@ -305,23 +306,13 @@ def api_resumen_consumo():
         logging.exception("Error en /api/resumen_consumo")
         return jsonify({"ok": False, "error": str(e)}), 500
 
-
-# -------------------------
-# Gráficas (Plotly)
-# -------------------------
-def _plotly_template_dark():
-    return {
-        "paper_bgcolor": "rgba(0,0,0,0)",
-        "plot_bgcolor": "rgba(0,0,0,0)",
-        "font": {"color": "rgba(255,255,255,.92)"},
-        "xaxis": {"gridcolor": "rgba(255,255,255,.08)", "zerolinecolor": "rgba(255,255,255,.10)"},
-        "yaxis": {"gridcolor": "rgba(255,255,255,.08)", "zerolinecolor": "rgba(255,255,255,.10)"},
-        "margin": {"l": 40, "r": 20, "t": 40, "b": 40},
-    }
-
-
+# Nueva API para gráficas dinámicas desde graficas_finales
 @app.route("/api/graficas")
 def api_graficas():
+    """
+    Devuelve las gráficas dinámicas generadas por ml/graficas_finales.py usando los mismos filtros y flujo de datos que /api/graficas.
+    Parámetros: inicio, fin, diseno, zona, turno, wbs (opcional, igual que /api/graficas)
+    """
     inicio = request.args.get("inicio")
     fin = request.args.get("fin")
     diseno = request.args.get("diseno") or None
@@ -333,72 +324,19 @@ def api_graficas():
         return jsonify({"ok": False, "error": "Debes enviar inicio y fin"}), 400
 
     try:
-        # Usar búsqueda con BST/AVL
         filas, _, _ = buscar_por_rango(inicio, fin)
-        # Aplicar filtros adicionales si se especificaron
         if diseno or zona or turno or wbs:
             filas = busqueda_diseno_destino(filas, diseno=diseno, destino=zona, turno=turno, wbs=wbs)
         if not filas:
-            return jsonify({"ok": True, "figs": {}, "num_registros": 0, "graficas_disponibles": []})
+            return jsonify({"ok": True, "graficas": {}, "num_registros": 0})
         df = pd.DataFrame(filas)
         df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-        # 1) Volumen por día
-        g1 = df.dropna(subset=["fecha"]).groupby(df["fecha"].dt.date)["volumen_m3"].sum().reset_index()
-        fig_vol_dia = {
-            "data": [{"type": "bar", "x": [str(x) for x in g1["fecha"]], "y": [float(v) for v in g1["volumen_m3"]]}],
-            "layout": {"title": "Volumen por día (m³)", **_plotly_template_dark()},
-        }
-        # 2) Volumen por diseño
-        g2 = df.groupby("diseno")["volumen_m3"].sum().reset_index().sort_values("volumen_m3", ascending=False)
-        fig_vol_diseno = {
-            "data": [{"type": "bar", "x": g2["diseno"].tolist(), "y": [float(v) for v in g2["volumen_m3"]]}],
-            "layout": {"title": "Volumen por diseño (m³)", **_plotly_template_dark()},
-        }
-        # 3) Consumo total por material (usando cruce_consumo_por_rango si existe)
-
-        resumen = cruce_consumo_por_rango(
-            inicio, fin,
-            diseno=diseno,
-            zona=zona,
-            turno=turno,
-            wbs=wbs,
-            db_path=DB_PATH,
-        )
-        labels = [
-            "Arena (kg)", "Grava (kg)", "Cemento (kg)", "Agua (kg)",
-            "Rheo + Sika115", "BASF + Sika200", "Delvo", "Glenium 7950", "Glenium 7970", "Fibras"
-        ]
-        values = [
-            float(resumen.get("arena_kg", 0)),
-            float(resumen.get("grava_kg", 0)),
-            float(resumen.get("cemento_kg", 0)),
-            float(resumen.get("agua_kg", 0)),
-            float(resumen.get("aditivo_rheo_sika115", 0)),
-            float(resumen.get("aditivo_basf_sika200", 0)),
-            float(resumen.get("aditivo_delvo", 0)),
-            float(resumen.get("aditivo_glenium_7950", 0)),
-            float(resumen.get("aditivo_glenium_7970", 0)),
-            float(resumen.get("aditivo_fibras", 0)),
-        ]
-        fig_consumo_mat = {
-            "data": [{"type": "bar", "x": labels, "y": values}],
-            "layout": {"title": "Consumo total estimado por material", **_plotly_template_dark()},
-        }
-        figs = {
-            "volumen_por_dia": fig_vol_dia,
-            "consumo_por_material": fig_consumo_mat,
-            "volumen_por_diseno": fig_vol_diseno,
-        }
-        return jsonify({
-            "ok": True,
-            "figs": figs,
-            "num_registros": int(df.shape[0]),
-            "graficas_disponibles": list(figs.keys())
-        })
+        logging.exception(f"Dataframe columns: {df.columns.tolist()}")
+        figs = graficas_dinamicas(df)
+        return jsonify({"ok": True, "graficas": figs, "num_registros": int(df.shape[0])})
     except Exception as e:
-        logging.exception("Error en /api/graficas")
+        logging.exception("Error en /api/graficas_finales")
         return jsonify({"ok": False, "error": str(e)}), 500
-
 
 # -------------------
 # APIs de Predicción ML

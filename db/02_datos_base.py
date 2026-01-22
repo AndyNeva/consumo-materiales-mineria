@@ -1,18 +1,15 @@
 import sqlite3
 import os
 
-# --------------------------------------------------
-# CONFIGURACIÓN
-# --------------------------------------------------
+# Configuración
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
 
-# --------------------------------------------------
-# INSERCIÓN DE DATOS BASE
-# --------------------------------------------------
 def cargar_datos_base():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    """Carga usuarios y materiales iniciales en la BD"""
+    conexion = sqlite3.connect(DB_PATH)
+    cursor = conexion.cursor()
 
     # Usuario administrador
     cursor.execute(
@@ -27,9 +24,9 @@ def cargar_datos_base():
         "(3, 'Grava', 'Kg')"
     )
 
-    conn.commit()
-    conn.close()
-    print("✅ Datos base cargados.")
+    conexion.commit()
+    conexion.close()
+    print("Datos base cargados.")
 
 # --------------------------------------------------
 # EJECUCIÓN DIRECTA

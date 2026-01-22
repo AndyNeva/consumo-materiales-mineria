@@ -1,20 +1,19 @@
 import sqlite3
 import os
 
-# CONTROL DE SEGURIDAD
-# Evita borrar la base de datos por error
+# Control de seguridad para evitar borrar la BD por error
 
-PERMITIR_RECREAR_DB = True  # Cambiar a True SOLO en migración inicial o rrecrear db
+PERMITIR_RECREAR_DB = True  
 
-# CONFIGURACIÓN DE RUTAS
+# Configuración de rutas
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
 
-# CREACIÓN DEL ESQUEMA DE LA BASE DE DATOS
-
 def crear_esquema():
-    # Si existe una base anterior, se elimina (si está permitido)
+    """Crea el esquema completo de la base de datos"""
+    
+    # Eliminar BD anterior si está permitido
     if os.path.exists(DB_PATH):
         if PERMITIR_RECREAR_DB:
             try:
@@ -27,8 +26,8 @@ def crear_esquema():
             print("  Cambie PERMITIR_RECREAR_DB = True para permitirlo.")
             return
 
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    conexion = sqlite3.connect(DB_PATH)
+    cursor = conexion.cursor()
 
     # Tabla de usuarios
     cursor.execute('''
@@ -59,7 +58,7 @@ def crear_esquema():
     ]:
         try:
             cursor.execute(f"ALTER TABLE materiales ADD COLUMN {columna} {definicion}")
-            print(f"✅ Columna {columna} agregada a materiales.")
+            print(f"Columna {columna} agregada a materiales.")
         except sqlite3.OperationalError:
             # La columna ya existe
             pass
@@ -145,9 +144,9 @@ def crear_esquema():
         )
     ''')
 
-    conn.commit()
-    conn.close()
-    print("✅ Esquema creado correctamente.")
+    conexion.commit()
+    conexion.close()
+    print("Esquema creado correctamente.")
 
 # --------------------------------------------------
 # EJECUCIÓN DIRECTA

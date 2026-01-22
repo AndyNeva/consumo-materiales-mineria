@@ -1,10 +1,8 @@
 import pandas as pd
 
-# --------------------------------------------------
-# FUNCIÓN UTILITARIA
-# Limpia valores numéricos provenientes del Excel
-# --------------------------------------------------
+
 def limpiar_numero(valor):
+    """Convierte valores del Excel a float, manejando casos especiales"""
     # Si ya es número, lo devuelve como float
     if isinstance(valor, (int, float)):
         return float(valor)

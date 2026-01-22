@@ -5,15 +5,15 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
 
-conn = sqlite3.connect(DB_PATH)
+conexion = sqlite3.connect(DB_PATH)
 
 df_recetas = pd.read_sql("""
     SELECT *
     FROM recetas
     ORDER BY codigo_diseno
-""", conn)
+""", conexion)
 
-conn.close()
+conexion.close()
 
 print("Cantidad de recetas:", len(df_recetas))
 print("\nPrimeras recetas:")

@@ -3,16 +3,12 @@ import sqlite3
 import os
 from utilidades import limpiar_numero
 
-# --------------------------------------------------
-# CONFIGURACIÓN
-# --------------------------------------------------
+#Configuración
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
 EXCEL_PATH = os.path.join(BASE_DIR, "data", "raw", "Batch_Plant_Production_2025.xlsm")
 
-# --------------------------------------------------
-# MAPEO EXACTO DE COLUMNAS DEL EXCEL
-# --------------------------------------------------
+# Mapeo de columnas del Excel a campos de BD
 COLUMNAS_RECETAS = {
     "cemento_kg": "CEMENTO",
     "arena_kg": "Arena (kg)",
@@ -26,21 +22,20 @@ COLUMNAS_RECETAS = {
     "aditivo_fibras": "Sika PP 48 (kg)-BARCHIP"
 }
 
-# --------------------------------------------------
-# MIGRACIÓN DE DATOS HISTÓRICOS
-# --------------------------------------------------
+
 def cargar_datos():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    """Migra datos históricos del Excel a la BD"""
+    conexion = sqlite3.connect(DB_PATH)
+    cursor = conexion.cursor()
 
     # ========== A. DESPACHOS ==========
     print(" Cargando Despachos...")
     df_desp = pd.read_excel(EXCEL_PATH, sheet_name="Ingreso_Diario", header=0, engine='openpyxl')
     df_desp.columns = df_desp.columns.str.strip()
 
-    for _, row in df_desp.iterrows():
-        fecha = str(row.get('FECHA')).split(' ')[0]
-        if pd.isna(row.get('FECHA')) or fecha in ['NaT', 'nan', '', '-']:
+    for _, fila in df_desp.iterrows():
+        fecha = str(fila.get('FECHA')).split(' ')[0]
+        if pd.isna(fila.get('FECHA')) or fecha in ['NaT', 'nan', '', '-']:
             continue
 
         cursor.execute("""
@@ -53,44 +48,44 @@ def cargar_datos():
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             fecha,
-            str(row.get('Fuente de cemento','')),
-            str(row.get('Diseño de la Mezcla','')),
-            str(row.get('Lote #','')),
-            str(row.get('Zona','')),
-            str(row.get('WBS','')),
-            limpiar_numero(row.get('Volumen (m3)')),
-            str(row.get('Turno', row.get('TURNO', ''))),
-            limpiar_numero(row.get('ARENA HUMEDAD (%)')),
-            limpiar_numero(row.get('Asentamiento Final (cm)')),
-            limpiar_numero(row.get('Temp. (º C)')),
-            limpiar_numero(row.get('Arena (kg)')),
-            limpiar_numero(row.get('Grava (kg)')),
-            limpiar_numero(row.get('UCEM HE (kg)')),
-            limpiar_numero(row.get('Agua (kg)')),
-            limpiar_numero(row.get('RHEO 1000 (kg)  Sika 115 (kg)')),
-            limpiar_numero(row.get('BASF 719 (kg)  Sika 200 (kg)')),
-            limpiar_numero(row.get('Delvo (litros)')),
-            limpiar_numero(row.get('MasterGlenium 7950')),
-            limpiar_numero(row.get('MasterGlenium 7970')),
-            limpiar_numero(row.get('Sika PP 48 (kg)-BARCHIP'))
+            str(fila.get('Fuente de cemento','')),
+            str(fila.get('Diseño de la Mezcla','')),
+            str(fila.get('Lote #','')),
+            str(fila.get('Zona','')),
+            str(fila.get('WBS','')),
+            limpiar_numero(fila.get('Volumen (m3)')),
+            str(fila.get('Turno', fila.get('TURNO', ''))),
+            limpiar_numero(fila.get('ARENA HUMEDAD (%)')),
+            limpiar_numero(fila.get('Asentamiento Final (cm)')),
+            limpiar_numero(fila.get('Temp. (º C)')),
+            limpiar_numero(fila.get('Arena (kg)')),
+            limpiar_numero(fila.get('Grava (kg)')),
+            limpiar_numero(fila.get('UCEM HE (kg)')),
+            limpiar_numero(fila.get('Agua (kg)')),
+            limpiar_numero(fila.get('RHEO 1000 (kg)  Sika 115 (kg)')),
+            limpiar_numero(fila.get('BASF 719 (kg)  Sika 200 (kg)')),
+            limpiar_numero(fila.get('Delvo (litros)')),
+            limpiar_numero(fila.get('MasterGlenium 7950')),
+            limpiar_numero(fila.get('MasterGlenium 7970')),
+            limpiar_numero(fila.get('Sika PP 48 (kg)-BARCHIP'))
         ))
 
     # ========== B. INVENTARIO ==========
     print("Cargando Inventario...")
     df_inv = pd.read_excel(EXCEL_PATH, sheet_name="INGRESOS Y CONSUMO DE AGREGADOS", header=1, engine='openpyxl')
 
-    for _, row in df_inv.iterrows():
-        fecha = str(row.iloc[0]).split(' ')[0]
-        if pd.isna(row.iloc[0]) or fecha in ['NaT', 'nan', '']:
+    for _, fila in df_inv.iterrows():
+        fecha = str(fila.iloc[0]).split(' ')[0]
+        if pd.isna(fila.iloc[0]) or fecha in ['NaT', 'nan', '']:
             continue
 
         prov = "Desconocido"
         try:
-            if str(row.iloc[10]).strip() not in ['-', 'nan', '']:
+            if str(fila.iloc[10]).strip() not in ['-', 'nan', '']:
                 prov = "Armijos"
-            elif str(row.iloc[11]).strip() not in ['-', 'nan', '']:
+            elif str(fila.iloc[11]).strip() not in ['-', 'nan', '']:
                 prov = "Crusermine"
-            elif str(row.iloc[12]).strip() not in ['-', 'nan', '']:
+            elif str(fila.iloc[12]).strip() not in ['-', 'nan', '']:
                 prov = "Quiringue"
         except:
             pass
@@ -101,7 +96,7 @@ def cargar_datos():
         ]
 
         for col, mat, tipo in movs:
-            cant = limpiar_numero(row.iloc[col])
+            cant = limpiar_numero(fila.iloc[col])
             if cant > 0:
                 cursor.execute(
                     "INSERT INTO movimientos (usuario_id, material_id, cantidad, fecha, tipo, proveedor) VALUES (?,?,?,?,?,?)",
@@ -116,8 +111,8 @@ def cargar_datos():
     col_diseno = next((c for c in df_mst.columns if "DISEÑO" in c.upper()), None)
 
     if col_diseno:
-        for _, row in df_mst.iterrows():
-            cod = str(row[col_diseno]).strip()
+        for _, fila in df_mst.iterrows():
+            cod = str(fila[col_diseno]).strip()
             if cod in ['', 'nan', '-']:
                 continue
 
@@ -129,20 +124,20 @@ def cargar_datos():
                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 cod,
-                limpiar_numero(row.get(COLUMNAS_RECETAS["cemento_kg"])),
-                limpiar_numero(row.get(COLUMNAS_RECETAS["arena_kg"])),
-                limpiar_numero(row.get(COLUMNAS_RECETAS["grava_kg"])),
-                limpiar_numero(row.get(COLUMNAS_RECETAS["agua_kg"])),
-                limpiar_numero(row.get(COLUMNAS_RECETAS["aditivo_a"])),
-                limpiar_numero(row.get(COLUMNAS_RECETAS["aditivo_b"])),
-                limpiar_numero(row.get(COLUMNAS_RECETAS["aditivo_delvo"])),
-                limpiar_numero(row.get(COLUMNAS_RECETAS["aditivo_glenium_7950"])),
-                limpiar_numero(row.get(COLUMNAS_RECETAS["aditivo_glenium_7970"])),
-                limpiar_numero(row.get(COLUMNAS_RECETAS["aditivo_fibras"]))
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["cemento_kg"])),
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["arena_kg"])),
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["grava_kg"])),
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["agua_kg"])),
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["aditivo_a"])),
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["aditivo_b"])),
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["aditivo_delvo"])),
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["aditivo_glenium_7950"])),
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["aditivo_glenium_7970"])),
+                limpiar_numero(fila.get(COLUMNAS_RECETAS["aditivo_fibras"]))
             ))
 
-    conn.commit()
-    conn.close()
+    conexion.commit()
+    conexion.close()
     print("Migración de datos completada.")
 
 # --------------------------------------------------

@@ -9,8 +9,8 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gestion_mate
 print("Ruta DB:", DB_PATH)
 print("¿Existe DB?:", os.path.exists(DB_PATH))
 
-conn = sqlite3.connect(DB_PATH)
-cursor = conn.cursor()
+conexion = sqlite3.connect(DB_PATH)
+cursor = conexion.cursor()
 
 cursor.execute("""
     SELECT name
@@ -24,5 +24,5 @@ print("Tablas en la base de datos:")
 for t in tablas:
     print("-", t[0])
 
-conn.close()
+conexion.close()
 print("✅ Script finalizado")
