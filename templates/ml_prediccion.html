@@ -100,7 +100,7 @@
       cursor:pointer;
       font-weight:600;
     }
-    .btn:hover{ background:#2a4c88; }
+    .btn:hover{ background:#2a4c8d; }
 
     .btn.secondary{
       background:rgba(255,255,255,.06);
@@ -197,9 +197,7 @@
     <div class="topbar">
       <div>
         <h1>Predicción ML</h1>
-        <div class="subtitle">
-          
-        </div>
+        <div class="subtitle">Predice consumo futuro de materiales con inteligencia artificial</div>
       </div>
 
       <div class="actions">
@@ -230,24 +228,20 @@
 
         <div class="row" style="margin-top:12px;">
           <div>
-            <label>Targets</label>
-            <input id="infoTargets" disabled value="—"/>
+            <label>Variables de entrada</label>
+            <input id="infoFeatures" disabled value="fecha, diseño, volumen y turno"/>
           </div>
           <div>
-            <label>Features</label>
-            <input id="infoFeatures" disabled value="—"/>
+            <label>Salidas predichas</label>
+            <input id="infoTargets" disabled value="Arena (kg), Grava (kg), Cemento (kg)"/>
           </div>
         </div>
 
         <details>
           <summary>Ver métricas</summary>
-          <div class="muted" style="margin-top:10px;">(Se muestra lo que devuelve <span class="mono">metricas</span>)</div>
-          <table>
+          <table style="margin-top:10px;">
             <thead>
-              <tr>
-                <th>Métrica</th>
-                <th>Valor</th>
-              </tr>
+              <tr><th>Métrica</th><th>Valor</th></tr>
             </thead>
             <tbody id="tbodyMetricas"></tbody>
           </table>
@@ -301,7 +295,7 @@
         </div>
 
         <details style="margin-top:14px;">
-          <summary>Batch (opcional): pegar JSON y predecir</summary>
+          <summary>Batch (predecir varios a la vez)</summary>
           <div class="muted" style="margin-top:10px;">
             Formato:
             <span class="mono">{ "predicciones": [ {"fecha":"2026-03-01","turno":"DIA","diseno":"H25","volumen":6}, ... ] }</span>
