@@ -526,7 +526,7 @@ document.getElementById("loginForm").addEventListener("submit",(e)=>{
   const pass = document.getElementById("p").value;
   if(!usuario || !pass){ toast("bad","Datos incompletos","Ingresa usuario y contraseña."); return; }
   localStorage.setItem(LS_USER, JSON.stringify({usuario}));
-  window.location.href = "dashboard.html";
+  window.location.href = "/dashboard";
 });
 
 </script>
