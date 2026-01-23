@@ -152,7 +152,7 @@ story.append(Paragraph(
 categorias_features = [
     ["Categoría", "Cantidad", "Descripción"],
     ["Variables Temporales", "14", "Fecha numérica, términos polinómicos, codificación cíclica (sen/cos)"],
-    ["Variables Operativas", "10", "Turno, volumen, humedad, agua, aditivos químicos"],
+    ["Variables Operativas", "2", "Turno, volumen"],
     ["Diseño de Mezcla", "10", "One-hot encoding de los 10 diseños más frecuentes + OTROS"],
 ]
 tabla_cat = Table(categorias_features, colWidths=[1.8*inch, 1*inch, 3.5*inch])
@@ -304,9 +304,10 @@ story.append(PageBreak())
 story.append(Paragraph("6. VISUALIZACIONES", styles['CustomHeading2']))
 
 # Incluir gráficos si existen
-grafico_detallado = BASE_DIR / 'prediccion_materiales_detallado.png'
-grafico_comparacion = BASE_DIR / 'comparacion_modelos.png'
-grafico_serie = BASE_DIR / 'serie_tiempo_materiales.png'
+GRAFICAS_DIR = BASE_DIR / 'graficas'
+grafico_detallado = GRAFICAS_DIR / 'prediccion_materiales_detallado.png'
+grafico_comparacion = GRAFICAS_DIR / 'comparacion_modelos.png'
+grafico_serie = GRAFICAS_DIR / 'serie_tiempo_materiales.png'
 
 if grafico_comparacion.exists():
     story.append(Paragraph("6.1 Comparación de Modelos", styles['CustomHeading3']))
@@ -341,7 +342,7 @@ ing_features_bullets = [
     "<b>Codificación Cíclica:</b> Sen/Cos de mes, día del año y semana para patrones estacionales continuos",
     "<b>Variables de Calendario:</b> Mes, día del año, semana del año, año",
     "<b>One-Hot Encoding:</b> Top 10 diseños de mezcla + categoría 'OTROS'",
-    "<b>Variables Numéricas:</b> Volumen, humedad, agua y 6 tipos de aditivos"
+    "<b>Variables Numéricas:</b> Volumen"
 ]
 for bullet in ing_features_bullets:
     story.append(Paragraph(f"• {bullet}", styles['CustomBullet']))
@@ -356,14 +357,14 @@ funcion_params = [
     "<b>fecha_str:</b> Fecha en formato 'YYYY-MM-DD'",
     "<b>turno:</b> 'DIA' o 'NOCHE'",
     "<b>diseno:</b> Código del diseño de mezcla",
-    "<b>Variables numéricas:</b> volumen, humedad, agua, y 6 aditivos"
+    "<b>Variables numéricas:</b> volumen"
 ]
 for param in funcion_params:
     story.append(Paragraph(f"• {param}", styles['CustomBullet']))
 story.append(Spacer(1, 0.15*inch))
 
 story.append(Paragraph(
-    "La función construye el vector completo de 34 características, aplica normalización y retorna "
+    "La función construye el vector completo de 26 características, aplica normalización y retorna "
     "las cantidades predichas en kg.",
     styles['CustomBody']
 ))

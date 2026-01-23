@@ -3,7 +3,6 @@ print("🚀 Script iniciado")
 import sqlite3
 import os
 
-# Como estamos en la carpeta db, la base está aquí mismo
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gestion_materiales.db")
 
 print("Ruta DB:", DB_PATH)
@@ -25,4 +24,4 @@ for t in tablas:
     print("-", t[0])
 
 conexion.close()
-print("✅ Script finalizado")
+print("Script finalizado")

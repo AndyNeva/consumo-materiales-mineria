@@ -28,7 +28,7 @@ def cargar_datos():
     conexion = sqlite3.connect(DB_PATH)
     cursor = conexion.cursor()
 
-    # ========== A. DESPACHOS ==========
+    # ========== DESPACHOS ==========
     print(" Cargando Despachos...")
     df_desp = pd.read_excel(EXCEL_PATH, sheet_name="Ingreso_Diario", header=0, engine='openpyxl')
     df_desp.columns = df_desp.columns.str.strip()
@@ -70,7 +70,7 @@ def cargar_datos():
             limpiar_numero(fila.get('Sika PP 48 (kg)-BARCHIP'))
         ))
 
-    # ========== B. INVENTARIO ==========
+    # ========== INVENTARIO ==========
     print("Cargando Inventario...")
     df_inv = pd.read_excel(EXCEL_PATH, sheet_name="INGRESOS Y CONSUMO DE AGREGADOS", header=1, engine='openpyxl')
 
@@ -103,7 +103,7 @@ def cargar_datos():
                     (1, mat, cant, fecha, tipo, prov)
                 )
 
-    # ========== C. RECETAS ==========
+    # ========== RECETAS ==========
     print("Cargando Recetas...")
     df_mst = pd.read_excel(EXCEL_PATH, sheet_name="Base de Datos ", header=1, engine='openpyxl')
     df_mst.columns = df_mst.columns.astype(str).str.strip()
@@ -140,8 +140,5 @@ def cargar_datos():
     conexion.close()
     print("Migración de datos completada.")
 
-# --------------------------------------------------
-# EJECUCIÓN DIRECTA
-# --------------------------------------------------
 if __name__ == "__main__":
     cargar_datos()

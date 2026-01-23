@@ -28,8 +28,6 @@ def cargar_datos_base():
     conexion.close()
     print("Datos base cargados.")
 
-# --------------------------------------------------
-# EJECUCIÓN DIRECTA
-# --------------------------------------------------
+
 if __name__ == "__main__":
     cargar_datos_base()

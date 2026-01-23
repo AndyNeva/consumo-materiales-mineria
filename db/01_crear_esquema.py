@@ -148,8 +148,6 @@ def crear_esquema():
     conexion.close()
     print("Esquema creado correctamente.")
 
-# --------------------------------------------------
-# EJECUCIÓN DIRECTA
-# --------------------------------------------------
+
 if __name__ == "__main__":
     crear_esquema()

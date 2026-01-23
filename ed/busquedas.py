@@ -1,4 +1,3 @@
-# ed/busquedas.py
 import sys
 import time
 from utils.loaders import cargar_datos_tabla, convertir_formato_historial
@@ -20,7 +19,7 @@ def buscar_por_rango(inicio, fin):
     bst = ArbolBinarioBusqueda()
     for d in datos:
         bst.insertar(d)
-    t0 = time.perf_counter()  # Mayor resolución que time.time()
+    t0 = time.perf_counter()  
     resultado_bst = bst.buscar_rango(inicio, fin)
     tiempo_bst = time.perf_counter() - t0
     
@@ -41,9 +40,9 @@ def buscar_por_rango(inicio, fin):
     print(f"  AVL: {len(resultado_avl)} registros en {tiempo_avl_ms:.4f}ms ({tiempo_avl:.6f}s)")
     
     # Convertir a formato esperado por frontend
-    out = convertir_formato_historial(resultado_avl)
+    resultado = convertir_formato_historial(resultado_avl)
     
-    return out, tiempo_bst, tiempo_avl
+    return resultado, tiempo_bst, tiempo_avl
 
 
 def busqueda_diseno_destino(resultados, diseno=None, destino=None, turno=None, wbs=None):

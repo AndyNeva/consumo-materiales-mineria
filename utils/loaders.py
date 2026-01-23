@@ -3,6 +3,7 @@ import sqlite3
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
+# Ruta por defecto de la base de datos
 RUTA_BD = "db/gestion_materiales.db"
 
 # ===== FUNCIONES AUXILIARES =====
@@ -176,15 +177,15 @@ def insertar_despacho(
         return None
 
     with _conectar(ruta_bd) as conexion:
-        # Buscar receta
+        # Buscar la receta correspondiente al diseño
         receta = _receta_por_diseno(conexion, diseno_mezcla)
         if receta is None:
             return None
 
-        # Calcular consumos
+        # Calcular el consumo estimado de materiales
         estimados = _calcular_consumos_estimados(receta, volumen_m3)
 
-        # Preparar datos para insertar
+        # Preparar los datos para insertar en la tabla despachos
         datos: Dict[str, Any] = {
             "fecha": fecha,
             "volumen_m3": volumen_m3,
@@ -198,7 +199,7 @@ def insertar_despacho(
             **estimados,
         }
 
-        # Filtrar solo columnas existentes
+        # Filtrar solo las columnas que existen en la tabla
         columnas = _columnas_tabla(conexion, "despachos")
         datos = {k: v for k, v in datos.items() if k in columnas}
 
@@ -210,7 +211,7 @@ def insertar_despacho(
         conexion.commit()
         id_insertado = int(cursor.lastrowid)
 
-        # Descontar stock de materiales
+        # Descontar el stock de cada material usado en el despacho
         mapeo_consumo_material = {
             "arena_kg": "Arena",
             "grava_kg": "Grava",

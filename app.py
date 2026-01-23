@@ -19,44 +19,54 @@ from ml.predictor import predecir_batch, predecir_materiales, obtener_info_model
 # Configuración Flask
 app = Flask(__name__)
 
+# Definición de rutas y configuración de la base de datos
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 RUTA_BD = os.path.join(DIRECTORIO_BASE, "db", "gestion_materiales.db")
 app.config["DATABASE"] = RUTA_BD
 
+# Configuración de logging para registrar eventos y errores
 logging.basicConfig(level=logging.INFO)
 
 # ===== RUTAS HTML =====
 
 @app.route("/")
 def home():
+    # Redirige a la página de login por defecto
     return redirect(url_for("login"))
 
 @app.route("/login")
 def login():
+    # Renderiza la página de login
     return render_template("login.html")
 
 @app.route("/dashboard")
 def dashboard():
+    # Renderiza el dashboard principal
     return render_template("dashboard.html")
 
 @app.route("/registro")
 def registro():
+    # Renderiza la página de registro de despachos
     return render_template("registro.html")
 
 @app.route("/inventario")
 def inventario():
+    # Renderiza la página de inventario de materiales
     return render_template("inventario.html")
 
 @app.route("/historial")
 def historial():
+    # Renderiza la página de historial de consumos
     return render_template("historial.html")
 
 @app.route("/graficas")
 def graficas():
+    # Renderiza la página de gráficas
     return render_template("graficas.html")
 
 @app.route("/ml")
 def ml():
+    # Renderiza la página de predicción de materiales (ML)
     return render_template("ml_prediccion.html")
 
 # ===== APIS PRINCIPALES =====
@@ -65,10 +75,12 @@ def ml():
 def api_dashboard():
     """Obtiene datos del dashboard: consumo diario, registros recientes e inventario"""
     try:
+
+        # Consulta consumo diario y registros de la última semana
         consumo = consumo_diario(ruta_bd=RUTA_BD)
         registros_semanal, cantidad_registros_semanal = registros_ultima_semana(ruta_bd=RUTA_BD)
 
-        # Obtener inventario desde tabla materiales
+        # Consulta inventario actual desde la base de datos
         with _conectar() as conexion:
             cursor = conexion.cursor()
             cursor.execute("""
@@ -78,6 +90,7 @@ def api_dashboard():
             """)
             inventario = [dict(fila) for fila in cursor.fetchall()]
 
+        # Construye la respuesta en formato JSON
         respuesta = {
             "consumo_diario": consumo,
             "registros_ultima_semana": registros_semanal,
@@ -86,6 +99,7 @@ def api_dashboard():
         }
         return Response(json.dumps(respuesta, ensure_ascii=False), mimetype="application/json")
     except Exception as e:
+        # Manejo de errores y logging
         logging.exception("Error en /api/dashboard")
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -93,6 +107,7 @@ def api_dashboard():
 def api_recetas():
     """Lista diseños de mezcla disponibles"""
     try:
+        # Consulta los códigos de diseño de mezcla
         with _conectar() as conexion:
             cursor = conexion.cursor()
             cursor.execute("SELECT codigo_diseno FROM recetas ORDER BY codigo_diseno")
@@ -101,6 +116,7 @@ def api_recetas():
         disenos = [fila["codigo_diseno"] for fila in filas if fila["codigo_diseno"]]
         return jsonify({"ok": True, "disenos": disenos})
     except Exception as e:
+        # Manejo de errores y logging
         logging.exception("Error en /api/recetas")
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -108,11 +124,15 @@ def api_recetas():
 def api_despachos():
     """Maneja registro de despachos de producción"""
     if request.method == "GET":
+        # Solo informa que el endpoint está activo
         return jsonify({"ok": True, "msg": "Endpoint /api/despachos activo. Usa POST para guardar."})
 
     try:
+
+        # Obtiene los datos enviados en el cuerpo de la petición
         datos = request.get_json(force=True) or {}
 
+        # Extrae los campos esperados del despacho
         fecha = datos.get("fecha", "")
         volumen_m3 = datos.get("volumen_m3", 0)
         diseno_mezcla = datos.get("diseno_mezcla", "")
@@ -123,6 +143,8 @@ def api_despachos():
         asentamiento_final_cm = datos.get("asentamiento_final_cm", 0)
         temperatura_c = datos.get("temperatura_c", 0)
 
+
+        # Inserta el despacho en la base de datos
         nuevo_id = insertar_despacho(
             fecha=fecha,
             volumen=volumen_m3,
@@ -136,12 +158,15 @@ def api_despachos():
             ruta_bd=RUTA_BD,
         )
 
+
+        # Verifica si la inserción fue exitosa
         if not nuevo_id:
             return jsonify({"ok": False, "error": "No se pudo insertar el despacho (revisa validaciones/receta/BD)."}), 400
 
         return jsonify({"ok": True, "id": nuevo_id})
 
     except Exception as e:
+        # Manejo de errores y logging
         logging.exception("Error en /api/despachos")
         return jsonify({"ok": False, "error": f"Error al insertar despacho: {e}"}), 500
 
@@ -157,20 +182,23 @@ def api_historial_consumo():
     turno = request.args.get("turno") or None
     wbs = request.args.get("wbs") or None
 
+    # Valida que se envíen las fechas
     if not inicio or not fin:
         return jsonify({"error": "Debes enviar 'inicio' y 'fin'."}), 400
 
     try:
-        # Búsqueda con estructuras de datos
+
+        # Realiza la búsqueda usando estructuras de datos
         filas, tiempo_bst, tiempo_avl = buscar_por_rango(inicio, fin)
         
-        # Aplicar filtros adicionales
+        # Aplica filtros adicionales si se especifican
         if diseno or zona or turno or wbs:
             filas = busqueda_diseno_destino(filas, diseno=diseno, destino=zona, turno=turno, wbs=wbs)
 
-        # Ordenar por fecha e id
+        # Ordena los resultados por fecha e id
         filas.sort(key=lambda x: (x.get("fecha", ""), x.get("id", 0)))
         
+        # Construye la respuesta con los datos y tiempos de búsqueda
         respuesta = {
             "datos": filas,
             "tiempos": {"bst": round(tiempo_bst, 6), "avl": round(tiempo_avl, 6)},
@@ -179,6 +207,7 @@ def api_historial_consumo():
         return Response(json.dumps(respuesta, ensure_ascii=False), mimetype="application/json")
 
     except Exception as e:
+        # Manejo de errores y logging
         logging.exception("Error en /api/historial_consumo")
         return jsonify({"error": str(e)}), 500
 
@@ -189,6 +218,7 @@ def api_materiales():
     """Gestiona inventario de materiales"""
     if request.method == "GET":
         try:
+            # Consulta todos los materiales en la base de datos
             with _conectar() as conexion:
                 cursor = conexion.cursor()
                 cursor.execute("""
@@ -199,16 +229,18 @@ def api_materiales():
                 materiales = [dict(fila) for fila in cursor.fetchall()]
             return jsonify({"ok": True, "materiales": materiales})
         except Exception as e:
+            # Manejo de errores y logging
             logging.exception("Error en GET /api/materiales")
             return jsonify({"ok": False, "error": str(e)}), 500
     
-    # POST: actualizar stock
+    # POST: actualizar stock de un material
     try:
         datos = request.get_json(force=True) or {}
         material_id = datos.get("id")
         stock_actual = datos.get("stock_actual")
         stock_minimo = datos.get("stock_minimo")
         
+        # Valida que se envíe el ID del material
         if not material_id:
             return jsonify({"ok": False, "error": "Falta el ID del material"}), 400
         
@@ -216,6 +248,7 @@ def api_materiales():
             actualizaciones = []
             parametros = []
             
+            # Prepara los campos a actualizar
             if stock_actual is not None:
                 actualizaciones.append("stock_actual = ?")
                 parametros.append(float(stock_actual))
@@ -240,6 +273,7 @@ def api_materiales():
         return jsonify({"ok": True, "mensaje": "Material actualizado"})
     
     except Exception as e:
+        # Manejo de errores y logging
         logging.exception("Error en POST /api/materiales")
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -255,10 +289,12 @@ def api_resumen_consumo():
     turno = request.args.get("turno") or None
     wbs = request.args.get("wbs") or None
 
+    # Valida que se envíen las fechas
     if not inicio or not fin:
         return jsonify({"ok": False, "error": "Debes enviar inicio y fin"}), 400
 
     try:
+        # Llama la función para obtener el resumen de consumo
         resumen = cruce_consumo_por_rango(
             inicio,
             fin,
@@ -270,6 +306,7 @@ def api_resumen_consumo():
         )
         return jsonify({"ok": True, "resumen": resumen})
     except Exception as e:
+        # Manejo de errores y logging
         logging.exception("Error en /api/resumen_consumo")
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -279,12 +316,14 @@ def api_resumen_consumo():
 def api_cruce_consumo_registro():
     """Calcula cruce consumo vs stock para un registro específico"""
     try:
+        # Obtiene los datos enviados en el cuerpo de la petición
         datos = request.get_json(force=True)
         logging.warning(f"Payload recibido en cruce_consumo_registro: {datos}")
         
         if not datos:
             return jsonify({"ok": False, "error": "No se recibieron datos"}), 400
         
+        # Extrae los campos necesarios
         diseno = datos.get("diseno_mezcla")
         volumen = datos.get("volumen_m3")
         logging.warning(f"diseno_mezcla: {diseno}, volumen_m3: {volumen} (type: {type(volumen)})")
@@ -292,6 +331,7 @@ def api_cruce_consumo_registro():
         if not diseno or not volumen:
             return jsonify({"ok": False, "error": "Faltan diseno_mezcla o volumen"}), 400
         
+        # Consulta la receta y calcula los consumos estimados
         with _conectar(RUTA_BD) as conexion:
             receta = _receta_por_diseno(conexion, diseno)
             logging.warning(f"Receta obtenida: {receta}")
@@ -302,17 +342,16 @@ def api_cruce_consumo_registro():
             consumos = _calcular_consumos_estimados(receta, float(volumen))
             logging.warning(f"Consumos calculados: {consumos}")
         
+        # Realiza el cruce entre consumos y stock
         salida, no_mapeados, no_encontrados = cruzar_consumo_vs_stock(consumos)
         logging.warning(f"OUT cruce consumo vs stock: {salida}")
         
         return jsonify({"ok": True, "datos": salida, "no_mapeados": no_mapeados, "no_encontrados": no_encontrados})
     
     except Exception as e:
+        # Manejo de errores y logging
         logging.exception("Error en cruce_consumo_registro")
         return jsonify({"ok": False, "error": str(e)}), 500
-
-# Continúa en Parte 3...
-# Continuación final de app.py - Parte 3
 
 # ===== GRÁFICAS =====
 
@@ -326,26 +365,33 @@ def api_graficas():
     turno = request.args.get("turno") or None
     wbs = request.args.get("wbs") or None
 
+    # Valida que se envíen las fechas
     if not inicio or not fin:
         return jsonify({"ok": False, "error": "Debes enviar inicio y fin"}), 400
 
     try:
+
+        # Realiza la búsqueda y aplica filtros
         filas, _, _ = buscar_por_rango(inicio, fin)
         
         if diseno or zona or turno or wbs:
             filas = busqueda_diseno_destino(filas, diseno=diseno, destino=zona, turno=turno, wbs=wbs)
         
+        # Si no hay datos, retorna vacío
         if not filas:
             return jsonify({"ok": True, "graficas": {}, "num_registros": 0})
         
+        # Convierte los datos a DataFrame y procesa fechas
         df = pd.DataFrame(filas)
         df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
         
+        # Genera las figuras usando la función de gráficas
         figuras = graficas_dinamicas(df)
         
         return jsonify({"ok": True, "graficas": figuras, "num_registros": int(df.shape[0])})
     
     except Exception as e:
+        # Manejo de errores y logging
         logging.exception("Error en /api/graficas_finales")
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -358,6 +404,7 @@ def api_ml_info():
         info = obtener_info_modelo()
         return jsonify(info)
     except FileNotFoundError:
+        # Si el modelo no existe, informa al usuario
         return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
     except Exception as e:
         return jsonify({"error": f"Error al cargar modelo: {str(e)}"}), 500
@@ -366,6 +413,7 @@ def api_ml_info():
 def api_ml_predecir():
     """Realiza predicción de materiales para un despacho"""
     try:
+        # Obtiene los datos enviados en el cuerpo de la petición
         datos = request.get_json(force=True)
 
         fecha = datos.get("fecha")
@@ -376,6 +424,7 @@ def api_ml_predecir():
         diseno = datos.get("diseno", "OTROS")
         volumen = datos.get("volumen", 6.0)
 
+        # Valida el volumen recibido
         try:
             volumen = float(volumen)
             if volumen <= 0:
@@ -383,12 +432,14 @@ def api_ml_predecir():
         except (TypeError, ValueError):
             return jsonify({"error": "El volumen debe ser un número"}), 400
 
+        # Realiza la predicción usando la función ML
         resultado = predecir_materiales(fecha_str=fecha, turno=turno, diseno=diseno, volumen=volumen)
         return jsonify(resultado)
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except FileNotFoundError:
+        # Si el modelo no existe, informa al usuario
         return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
     except Exception as e:
         return jsonify({"error": f"Error en la predicción: {str(e)}"}), 500
@@ -397,6 +448,7 @@ def api_ml_predecir():
 def api_ml_predecir_batch():
     """Realiza múltiples predicciones en lote"""
     try:
+        # Obtiene los datos enviados en el cuerpo de la petición
         datos = request.get_json(force=True)
 
         predicciones = datos.get("predicciones", [])
@@ -406,10 +458,12 @@ def api_ml_predecir_batch():
         if not isinstance(predicciones, list):
             return jsonify({"error": '"predicciones" debe ser un array'}), 400
 
+        # Realiza las predicciones en lote
         resultado = predecir_batch(predicciones)
         return jsonify(resultado)
 
     except FileNotFoundError:
+        # Si el modelo no existe, informa al usuario
         return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
     except Exception as e:
         return jsonify({"error": f"Error en predicción batch: {str(e)}"}), 500

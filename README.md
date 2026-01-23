@@ -287,7 +287,6 @@ proyecto-consumo-materiales/
 └── static/                        # Archivos estáticos (CSS, JS)
     ├── css/
     └── js/
-        ├── agregar.js             # Lógica para agregar materiales
         ├── dashboard.js           # Funciones del dashboard
         ├── graficas.js            # Renderizado de gráficas Plotly
         ├── historial.js           # Búsqueda y filtros de historial

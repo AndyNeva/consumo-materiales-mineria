@@ -95,7 +95,7 @@ def grafica_bar_volumen_por_dia(df):
         'title': "Volumen por día (m³)",
         'xaxis': {
             'title': 'Fecha',
-            'type': 'date',  # Plotly interpretará los strings como fechas
+            'type': 'date',  
             'gridcolor': 'rgba(255,255,255,.08)',
             'zerolinecolor': 'rgba(255,255,255,.10)'
         },
@@ -408,7 +408,7 @@ def grafica_corr_aditivos(df):
 def graficas_dinamicas(df):
     """
     Devuelve una LISTA ORDENADA con las gráficas recomendadas según el número de registros y columnas del DataFrame.
-    Orden: volúmenes → histogramas → frecuencia → boxplots → heatmaps (al final).
+    Orden: volúmenes → histogramas → frecuencia → boxplots → heatmaps.
     Cada elemento es un dict con 'nombre' y 'figura'.
     """
     graficas_lista = []
