@@ -1,7 +1,6 @@
-from flask import Flask, render_template, jsonify, request, Response
+from flask import Flask, render_template, jsonify, request, Response, redirect, url_for
 import os
 import json
-import sqlite3
 import logging
 import pandas as pd
 from utils.loaders import (
@@ -30,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 
 @app.route("/")
 def home():
-    return "Servidor Flask funcionando"
+    return redirect(url_for("login"))
 
 @app.route("/login")
 def login():

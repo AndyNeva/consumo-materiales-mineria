@@ -156,6 +156,25 @@ python database/03_cargar_datos_iniciales.py
 - Tabla `movimientos` (historial de inventario)
 - Tabla `centros_costos` y `zonas`
 
+#### 1.1. Poblar Inventario de Materiales
+
+**⚠️ IMPORTANTE**: Después de crear el esquema, poblar la tabla de materiales con stock inicial.
+
+```bash
+# Paso 4: Poblar materiales con inventario inicial
+python database/poblar_materiales.py
+```
+
+Este script:
+- Limpia la tabla `materiales`
+- Inserta 12 materiales con stock inicial:
+  - Arena, Grava, Cemento, Agua
+  - Aditivos: RHEO 1000, Sika 115, BASF 719, Sika 200
+  - Aditivos especiales: Delvo, Glenium 7950, Glenium 7970, Fibras
+- Configura stock actual, mínimo y máximo para cada material
+
+**Responder 's' cuando pregunte si desea poblar la tabla.**
+
 ### 2. Limpiar y Preparar Datos
 
 ```bash
@@ -228,7 +247,8 @@ proyecto-consumo-materiales/
 ├── database/                       # Scripts de base de datos
 │   ├── 01_crear_esquema.py        # Crea tablas
 │   ├── 02_datos_base.py           # Inserta datos iniciales
-│   └── 03_cargar_datos_iniciales.py  # Migra datos históricos
+│   ├── 03_cargar_datos_iniciales.py  # Migra datos históricos
+│   └── poblar_materiales.py       # Pobla inventario de materiales
 │
 ├── db/
 │   └── gestion_materiales.db      # Base de datos SQLite
@@ -453,6 +473,15 @@ python database/03_cargar_datos_iniciales.py
 ```bash
 python ml/LimpiezaDatos.py
 ```
+
+### Error: Inventario vacío o materiales faltantes
+**Causa**: No se ejecutó `poblar_materiales.py`
+
+**Solución**:
+```bash
+python database/poblar_materiales.py
+```
+Responder 's' cuando pregunte.
 
 ### Error: Recursión excedida en árboles
 **Causa**: Árbol muy grande
