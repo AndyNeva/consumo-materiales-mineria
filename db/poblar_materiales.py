@@ -1,9 +1,10 @@
 """
 Script para poblar la tabla materiales con los datos iniciales
 """
+import os
 import sqlite3
 
-DB_PATH = "db/gestion_materiales.db"
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "gestion_materiales.db")
 
 def poblar_materiales():
     conn = sqlite3.connect(DB_PATH)
