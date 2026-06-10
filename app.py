@@ -2,7 +2,6 @@ from flask import Flask, render_template, jsonify, request, Response, redirect, 
 import os
 import json
 import logging
-import pandas as pd
 from utils.loaders import (
     consumo_diario,
     registros_ultima_semana,
@@ -12,9 +11,6 @@ from utils.loaders import (
     _receta_por_diseno,
     _calcular_consumos_estimados,
     _conectar)
-from ml.graficas import graficas_dinamicas
-from ed.busquedas import buscar_por_rango, busqueda_diseno_destino
-from ml.predictor import predecir_batch, predecir_materiales, obtener_info_modelo
 
 # Configuración Flask
 app = Flask(__name__)
@@ -181,7 +177,8 @@ def api_historial_consumo():
     zona = request.args.get("zona") or None
     turno = request.args.get("turno") or None
     wbs = request.args.get("wbs") or None
-
+    # TODO: Usar busquedas SQL
+    """
     # Valida que se envíen las fechas
     if not inicio or not fin:
         return jsonify({"error": "Debes enviar 'inicio' y 'fin'."}), 400
@@ -211,6 +208,8 @@ def api_historial_consumo():
         logging.exception("Error en /api/historial_consumo")
         return jsonify({"error": str(e)}), 500
 
+        """
+        
 # ===== GESTIÓN DE MATERIALES =====
 
 @app.route("/api/materiales", methods=["GET", "POST"])
@@ -352,121 +351,6 @@ def api_cruce_consumo_registro():
         # Manejo de errores y logging
         logging.exception("Error en cruce_consumo_registro")
         return jsonify({"ok": False, "error": str(e)}), 500
-
-# ===== GRÁFICAS =====
-
-@app.route("/api/graficas")
-def api_graficas():
-    """Genera gráficas dinámicas avanzadas desde ml/graficas_finales"""
-    inicio = request.args.get("inicio")
-    fin = request.args.get("fin")
-    diseno = request.args.get("diseno") or None
-    zona = request.args.get("zona") or None
-    turno = request.args.get("turno") or None
-    wbs = request.args.get("wbs") or None
-
-    # Valida que se envíen las fechas
-    if not inicio or not fin:
-        return jsonify({"ok": False, "error": "Debes enviar inicio y fin"}), 400
-
-    try:
-
-        # Realiza la búsqueda y aplica filtros
-        filas, _, _ = buscar_por_rango(inicio, fin)
-        
-        if diseno or zona or turno or wbs:
-            filas = busqueda_diseno_destino(filas, diseno=diseno, destino=zona, turno=turno, wbs=wbs)
-        
-        # Si no hay datos, retorna vacío
-        if not filas:
-            return jsonify({"ok": True, "graficas": {}, "num_registros": 0})
-        
-        # Convierte los datos a DataFrame y procesa fechas
-        df = pd.DataFrame(filas)
-        df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-        
-        # Genera las figuras usando la función de gráficas
-        figuras = graficas_dinamicas(df)
-        
-        return jsonify({"ok": True, "graficas": figuras, "num_registros": int(df.shape[0])})
-    
-    except Exception as e:
-        # Manejo de errores y logging
-        logging.exception("Error en /api/graficas_finales")
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-# ===== MACHINE LEARNING =====
-
-@app.route("/api/ml/info")
-def api_ml_info():
-    """Obtiene información del modelo ML"""
-    try:
-        info = obtener_info_modelo()
-        return jsonify(info)
-    except FileNotFoundError:
-        # Si el modelo no existe, informa al usuario
-        return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
-    except Exception as e:
-        return jsonify({"error": f"Error al cargar modelo: {str(e)}"}), 500
-
-@app.route("/api/ml/predecir", methods=["POST"])
-def api_ml_predecir():
-    """Realiza predicción de materiales para un despacho"""
-    try:
-        # Obtiene los datos enviados en el cuerpo de la petición
-        datos = request.get_json(force=True)
-
-        fecha = datos.get("fecha")
-        if not fecha:
-            return jsonify({"error": 'El campo "fecha" es requerido'}), 400
-
-        turno = datos.get("turno")
-        diseno = datos.get("diseno", "OTROS")
-        volumen = datos.get("volumen", 6.0)
-
-        # Valida el volumen recibido
-        try:
-            volumen = float(volumen)
-            if volumen <= 0:
-                return jsonify({"error": "El volumen debe ser mayor a 0"}), 400
-        except (TypeError, ValueError):
-            return jsonify({"error": "El volumen debe ser un número"}), 400
-
-        # Realiza la predicción usando la función ML
-        resultado = predecir_materiales(fecha_str=fecha, turno=turno, diseno=diseno, volumen=volumen)
-        return jsonify(resultado)
-
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except FileNotFoundError:
-        # Si el modelo no existe, informa al usuario
-        return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
-    except Exception as e:
-        return jsonify({"error": f"Error en la predicción: {str(e)}"}), 500
-
-@app.route("/api/ml/predecir_batch", methods=["POST"])
-def api_ml_predecir_batch():
-    """Realiza múltiples predicciones en lote"""
-    try:
-        # Obtiene los datos enviados en el cuerpo de la petición
-        datos = request.get_json(force=True)
-
-        predicciones = datos.get("predicciones", [])
-        if not predicciones:
-            return jsonify({"error": 'Debes enviar un array de "predicciones"'}), 400
-
-        if not isinstance(predicciones, list):
-            return jsonify({"error": '"predicciones" debe ser un array'}), 400
-
-        # Realiza las predicciones en lote
-        resultado = predecir_batch(predicciones)
-        return jsonify(resultado)
-
-    except FileNotFoundError:
-        # Si el modelo no existe, informa al usuario
-        return jsonify({"error": "Modelo no encontrado", "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"}), 404
-    except Exception as e:
-        return jsonify({"error": f"Error en predicción batch: {str(e)}"}), 500
 
 # ===== INICIAR SERVIDOR =====
 
