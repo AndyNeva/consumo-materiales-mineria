@@ -1,14 +1,17 @@
 from __future__ import annotations
 import sqlite3
 import os
-from typing import Any, List, Optional
+from typing import Any, List
+from dotenv import load_dotenv
+
+load_dotenv()
+
+RUTA_BD = os.getenv("DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "gestion_materiales.db"))
 
 _TABLAS_PERMITIDAS = frozenset({
     "despachos", "materiales", "usuarios",
     "recetas", "movimientos", "centros_costos", "zonas"
 })
-
-RUTA_BD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "gestion_materiales.db")
 
 def conectar(ruta_bd: str = RUTA_BD) -> sqlite3.Connection:
     """
