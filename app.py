@@ -1,9 +1,11 @@
-from flask import Flask, render_template, jsonify, request, Response, redirect, url_for
+from flask import Flask, render_template, jsonify, request, Response, redirect, url_for, session
 import os
 import json
 import logging
 from dotenv import load_dotenv
-
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from auth.decoradores import login_required
 from utils.db import conectar, RUTA_BD
 from services.dashboard import consumo_diario, registros_ultima_semana
 from services.despachos import insertar_despacho, _receta_por_diseno, _calcular_consumos_estimados
@@ -20,7 +22,30 @@ app.secret_key = os.getenv("SECRET_KEY")
 if not app.secret_key:
     raise RuntimeError("SECRET_KEY no definida. Revisa tu archivo .env")
 
+# ===== COOKIES DE SESIÓN SEGURAS =====
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_NAME"] = "ph_session"
+app.config["PERMANENT_SESSION_LIFETIME"] = 3600
+
+# ===== RATE LIMITING =====
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],          # sin límite global, solo donde lo apliquemos
+    storage_uri="memory://"
+)
+
 logging.basicConfig(level=logging.INFO)
+
+# ===== HEADERS DE SEGURIDAD =====
+@app.after_request
+def agregar_headers_seguridad(response):
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 # ===== RUTAS HTML =====
 
@@ -33,24 +58,29 @@ def login():
     return render_template("login.html")
 
 @app.route("/dashboard")
+@login_required
 def dashboard():
     return render_template("dashboard.html")
 
 @app.route("/registro")
+@login_required
 def registro():
     return render_template("registro.html")
 
 @app.route("/inventario")
+@login_required
 def inventario():
     return render_template("inventario.html")
 
 @app.route("/historial")
+@login_required
 def historial():
     return render_template("historial.html")
 
 # ===== API DASHBOARD =====
 
 @app.route("/api/dashboard")
+@login_required
 def api_dashboard():
     """Datos del dashboard: consumo diario, registros recientes e inventario"""
     try:
@@ -80,6 +110,7 @@ def api_dashboard():
 # ===== API RECETAS =====
 
 @app.route("/api/recetas")
+@login_required
 def api_recetas():
     """Lista diseños de mezcla disponibles"""
     try:
@@ -96,6 +127,7 @@ def api_recetas():
 # ===== API DESPACHOS =====
 
 @app.route("/api/despachos", methods=["GET", "POST"])
+@login_required
 def api_despachos():
     """Registro de despachos de producción"""
     if request.method == "GET":
@@ -125,6 +157,7 @@ def api_despachos():
 # ===== API HISTORIAL =====
 
 @app.route("/api/historial_consumo")
+@login_required
 def api_historial_consumo():
     """Historial de consumo con filtros usando SQL puro"""
     inicio = request.args.get("inicio")
@@ -155,6 +188,7 @@ def api_historial_consumo():
 # ===== API MATERIALES =====
 
 @app.route("/api/materiales", methods=["GET", "POST"])
+@login_required
 def api_materiales():
     """Gestión de inventario de materiales"""
     if request.method == "GET":
@@ -186,6 +220,7 @@ def api_materiales():
 # ===== API RESUMEN CONSUMO =====
 
 @app.route("/api/resumen_consumo")
+@login_required
 def api_resumen_consumo():
     """Resumen de consumo por rango de fechas"""
     inicio = request.args.get("inicio")
@@ -211,6 +246,7 @@ def api_resumen_consumo():
 # ===== API CRUCE CONSUMO VS STOCK =====
 
 @app.route("/api/cruce_consumo_registro", methods=["POST"])
+@login_required
 def api_cruce_consumo_registro():
     """Cruce de consumo estimado vs stock para un registro"""
     try:
@@ -235,6 +271,13 @@ def api_cruce_consumo_registro():
     except Exception as e:
         logging.exception("Error en /api/cruce_consumo_registro")
         return jsonify({"ok": False, "error": str(e)}), 500
+
+# ===== API LOGIN =====
+@app.route("/api/login", methods=["POST"])
+@limiter.limit("5 per minute")          # tarea 12
+def api_login():
+    # Stub temporal — Juan reemplaza el cuerpo de esta función
+    return jsonify({"ok": False, "error": "Login no implementado aún"}), 501
 
 # ===== INICIAR SERVIDOR =====
 
