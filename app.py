@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request, Response, redirect, 
 import os
 import json
 import logging
+from dotenv import load_dotenv
 
 from utils.db import conectar, RUTA_BD
 from services.dashboard import consumo_diario, registros_ultima_semana
@@ -9,9 +10,16 @@ from services.despachos import insertar_despacho, _receta_por_diseno, _calcular_
 from services.historial import obtener_historial_consumo, cruce_consumo_por_rango
 from services.inventario import obtener_materiales, actualizar_material, cruzar_consumo_vs_stock
 
+load_dotenv()
+
 # Configuración Flask
 app = Flask(__name__)
 app.config["DATABASE"] = RUTA_BD
+app.secret_key = os.getenv("SECRET_KEY")
+
+if not app.secret_key:
+    raise RuntimeError("SECRET_KEY no definida. Revisa tu archivo .env")
+
 logging.basicConfig(level=logging.INFO)
 
 # ===== RUTAS HTML =====
