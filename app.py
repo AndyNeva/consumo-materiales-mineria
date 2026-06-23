@@ -5,8 +5,7 @@ import logging
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from auth.decoradores import login_required
-from auth.roles import rol_requerido, solo_admin, admin_u_operador  # control por rol (Juan Ruiz)
+from auth.roles import cualquier_usuario, solo_admin, admin_u_operador
 from auth.login import autenticar
 from utils.db import conectar, RUTA_BD
 from services.dashboard import consumo_diario, registros_ultima_semana
@@ -60,29 +59,29 @@ def login():
     return render_template("login.html")
 
 @app.route("/dashboard")
-@login_required
+@cualquier_usuario
 def dashboard():
     return render_template("dashboard.html")
 
 @app.route("/registro")
-@admin_u_operador          # Operador puede agregar registros (Juan Ruiz)
+@admin_u_operador          # Operador puede agregar registros
 def registro():
     return render_template("registro.html")
 
 @app.route("/inventario")
-@admin_u_operador          # Operador puede ver inventario (Juan Ruiz)
+@admin_u_operador          # Operador puede ver inventario
 def inventario():
     return render_template("inventario.html")
 
 @app.route("/historial")
-@admin_u_operador          # Visualizador no accede al historial (Juan Ruiz)
+@admin_u_operador          # Visualizador no accede al historial
 def historial():
     return render_template("historial.html")
 
 # ===== API DASHBOARD =====
 
 @app.route("/api/dashboard")
-@login_required
+@cualquier_usuario
 def api_dashboard():
     """Datos del dashboard: consumo diario, registros recientes e inventario"""
     try:
@@ -112,7 +111,7 @@ def api_dashboard():
 # ===== API RECETAS =====
 
 @app.route("/api/recetas")
-@login_required
+@cualquier_usuario
 def api_recetas():
     """Lista diseños de mezcla disponibles"""
     try:
@@ -129,7 +128,7 @@ def api_recetas():
 # ===== API DESPACHOS =====
 
 @app.route("/api/despachos", methods=["GET", "POST"])
-@admin_u_operador          # Operador puede agregar registros; Visualizador no (Juan Ruiz)
+@admin_u_operador          # Operador puede agregar registros; Visualizador no
 def api_despachos():
     """Registro de despachos de producción"""
     if request.method == "GET":
@@ -175,7 +174,7 @@ def api_despachos():
 # ===== API HISTORIAL =====
 
 @app.route("/api/historial_consumo")
-@login_required
+@admin_u_operador          # Visualizador no accede al historial
 def api_historial_consumo():
     """Historial de consumo con filtros usando SQL puro"""
     inicio = request.args.get("inicio")
@@ -242,7 +241,7 @@ def api_materiales():
 # ===== API RESUMEN CONSUMO =====
 
 @app.route("/api/resumen_consumo")
-@login_required
+@admin_u_operador          # Visualizador no accede al resumen de consumo
 def api_resumen_consumo():
     """Resumen de consumo por rango de fechas"""
     inicio = request.args.get("inicio")
@@ -268,7 +267,7 @@ def api_resumen_consumo():
 # ===== API CRUCE CONSUMO VS STOCK =====
 
 @app.route("/api/cruce_consumo_registro", methods=["POST"])
-@login_required
+@admin_u_operador
 def api_cruce_consumo_registro():
     """Cruce de consumo estimado vs stock para un registro"""
     try:
@@ -294,9 +293,9 @@ def api_cruce_consumo_registro():
         logging.exception("Error en /api/cruce_consumo_registro")
         return jsonify({"ok": False, "error": str(e)}), 500
 
-# ===== API LOGIN ===== (Juan Ruiz @eljuandaruiz)
+# ===== API LOGIN ===== 
 @app.route("/api/login", methods=["POST"])
-@limiter.limit("5 per minute")          # tarea 12 (rate limit general de @AndyNeva)
+@limiter.limit("5 per minute")  
 def api_login():
     """
     Autentica al usuario y abre sesión.

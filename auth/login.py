@@ -1,8 +1,6 @@
 """
 Lógica de autenticación del sistema.
 
-Responsable: Juan Ruiz (@eljuandaruiz) — módulo de autenticación.
-
 Aquí vive todo lo relacionado con verificar credenciales:
 - Hash y verificación de contraseñas con Werkzeug (viene con Flask).
 - Límite de longitud de contraseña (anti abuso de recursos al hashear).

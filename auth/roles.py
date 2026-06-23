@@ -1,8 +1,6 @@
 """
 Decoradores para proteger rutas según el rol del usuario.
 
-Responsable: Juan Ruiz (@eljuandaruiz) — módulo de autenticación.
-
 Los 3 perfiles del sistema:
 
   - Admin        : acceso total (ver, agregar, editar, eliminar, gestionar usuarios).
