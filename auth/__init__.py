@@ -16,7 +16,6 @@ from auth.roles import (
     cualquier_usuario,
     ROLES_VALIDOS,
 )
-from auth.decoradores import login_required
 
 __all__ = [
     "autenticar",
