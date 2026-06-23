@@ -219,9 +219,7 @@ El servidor estará disponible en: `http://localhost:5000`
 
 ### Credenciales de Acceso
 
-**Login por defecto**:
-- **Usuario**: `pteran`
-- **Contraseña**: `12345`
+Las credenciales se crean con el script de usuarios (ver sección **Autenticación y Roles**). Ya no se usan credenciales hardcodeadas.
 
 ### Páginas Web Disponibles
 
@@ -234,6 +232,38 @@ El servidor estará disponible en: `http://localhost:5000`
 | `/historial` | Búsqueda de registros históricos |
 | `/graficas` | Visualización de datos |
 | `/ml` | Predicciones con Machine Learning |
+
+---
+
+## 🔐 Autenticación y Roles
+
+El sistema usa login contra la tabla `usuarios` (contraseñas hasheadas con Werkzeug) y control de acceso por **3 perfiles**:
+
+| Rol | Puede hacer |
+|-----|-------------|
+| **Admin** | Acceso total: ver, agregar, editar y eliminar cualquier dato, incluida la gestión de usuarios e inventario. |
+| **Operador** | Ver el inventario y agregar registros nuevos (los registros pasan una validación de consistencia antes de confirmarse). |
+| **Visualizador** | Solo ver el dashboard principal. Sin acceso a inventario, registros ni edición. |
+
+**Medidas de seguridad del módulo de autenticación** (complementan las del proyecto): hash seguro de contraseñas, sesiones Flask con `SECRET_KEY` desde variables de entorno, consultas parametrizadas (anti SQL injection), límite de longitud de contraseña (128 caracteres) y bloqueo temporal de 15 minutos tras 5 intentos fallidos.
+
+### Crear los usuarios iniciales
+
+Después de crear el esquema y los datos base, ejecuta una sola vez:
+
+```bash
+python scripts/crear_usuarios.py
+```
+
+Esto añade la columna `password_hash` (si falta) y crea los usuarios de arranque:
+
+| Usuario | Contraseña | Rol |
+|---------|------------|-----|
+| `admin` | `admin123` | Admin |
+| `operador` | `operador123` | Operador |
+| `visor` | `visor123` | Visualizador |
+
+> ⚠️ Cambia estas contraseñas de demostración antes de cualquier uso real.
 
 ---
 

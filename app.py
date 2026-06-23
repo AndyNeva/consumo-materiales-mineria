@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from auth.decoradores import login_required
+from auth.roles import rol_requerido, solo_admin, admin_u_operador  # control por rol (Juan Ruiz)
+from auth.login import autenticar
 from utils.db import conectar, RUTA_BD
 from services.dashboard import consumo_diario, registros_ultima_semana
 from services.despachos import insertar_despacho, _receta_por_diseno, _calcular_consumos_estimados
@@ -63,17 +65,17 @@ def dashboard():
     return render_template("dashboard.html")
 
 @app.route("/registro")
-@login_required
+@admin_u_operador          # Operador puede agregar registros (Juan Ruiz)
 def registro():
     return render_template("registro.html")
 
 @app.route("/inventario")
-@login_required
+@admin_u_operador          # Operador puede ver inventario (Juan Ruiz)
 def inventario():
     return render_template("inventario.html")
 
 @app.route("/historial")
-@login_required
+@admin_u_operador          # Visualizador no accede al historial (Juan Ruiz)
 def historial():
     return render_template("historial.html")
 
@@ -127,7 +129,7 @@ def api_recetas():
 # ===== API DESPACHOS =====
 
 @app.route("/api/despachos", methods=["GET", "POST"])
-@login_required
+@admin_u_operador          # Operador puede agregar registros; Visualizador no (Juan Ruiz)
 def api_despachos():
     """Registro de despachos de producción"""
     if request.method == "GET":
@@ -135,6 +137,22 @@ def api_despachos():
 
     try:
         datos = request.get_json(force=True) or {}
+
+        # Validación previa para registros de Operador (Juan Ruiz):
+        # antes de confirmar, comprobamos que los datos sean consistentes.
+        errores = []
+        if not str(datos.get("fecha", "")).strip():
+            errores.append("Falta la fecha del despacho.")
+        try:
+            if float(datos.get("volumen_m3", 0)) <= 0:
+                errores.append("El volumen_m3 debe ser mayor que 0.")
+        except (TypeError, ValueError):
+            errores.append("El volumen_m3 no es un número válido.")
+        if not str(datos.get("diseno_mezcla", "")).strip():
+            errores.append("Falta el diseño de mezcla.")
+        if errores:
+            return jsonify({"ok": False, "error": " ".join(errores)}), 400
+
         nuevo_id = insertar_despacho(
             fecha=datos.get("fecha", ""),
             volumen=datos.get("volumen_m3", 0),
@@ -188,7 +206,7 @@ def api_historial_consumo():
 # ===== API MATERIALES =====
 
 @app.route("/api/materiales", methods=["GET", "POST"])
-@login_required
+@admin_u_operador          # ver inventario: Admin u Operador (Juan Ruiz)
 def api_materiales():
     """Gestión de inventario de materiales"""
     if request.method == "GET":
@@ -197,6 +215,10 @@ def api_materiales():
         except Exception as e:
             logging.exception("Error en GET /api/materiales")
             return jsonify({"ok": False, "error": str(e)}), 500
+
+    # Editar stock es una acción de edición -> solo Admin (Juan Ruiz).
+    if session.get("rol") != "Admin":
+        return jsonify({"ok": False, "error": "Solo el Administrador puede editar el inventario"}), 403
 
     try:
         datos = request.get_json(force=True) or {}
@@ -272,12 +294,46 @@ def api_cruce_consumo_registro():
         logging.exception("Error en /api/cruce_consumo_registro")
         return jsonify({"ok": False, "error": str(e)}), 500
 
-# ===== API LOGIN =====
+# ===== API LOGIN ===== (Juan Ruiz @eljuandaruiz)
 @app.route("/api/login", methods=["POST"])
-@limiter.limit("5 per minute")          # tarea 12
+@limiter.limit("5 per minute")          # tarea 12 (rate limit general de @AndyNeva)
 def api_login():
-    # Stub temporal — Juan reemplaza el cuerpo de esta función
-    return jsonify({"ok": False, "error": "Login no implementado aún"}), 501
+    """
+    Autentica al usuario y abre sesión.
+
+    Complementa el rate limit general con: límite de intentos fallidos +
+    bloqueo temporal, límite de longitud de contraseña, hash con Werkzeug y
+    consultas parametrizadas (ver auth/login.py).
+    """
+    datos = request.get_json(silent=True) or {}
+    username = datos.get("usuario", "")
+    password = datos.get("password", "")
+    ip = get_remote_address()
+
+    resultado = autenticar(username, password, ip=ip)
+
+    if not resultado["ok"]:
+        # 423 (Locked) si está bloqueado por intentos; 401 si solo son credenciales malas.
+        codigo = 423 if resultado.get("bloqueado") else 401
+        return jsonify({"ok": False, "error": resultado["error"]}), codigo
+
+    # Login correcto: guardamos identidad y rol en la sesión segura de Flask.
+    usuario = resultado["usuario"]
+    session.clear()
+    session["usuario_id"] = usuario["id"]
+    session["username"] = usuario["username"]
+    session["rol"] = usuario["rol"]
+    session.permanent = True
+
+    return jsonify({"ok": True, "usuario": usuario})
+
+
+# ===== LOGOUT ===== (Juan Ruiz)
+@app.route("/logout")
+def logout():
+    """Cierra la sesión y vuelve al login."""
+    session.clear()
+    return redirect(url_for("login"))
 
 # ===== INICIAR SERVIDOR =====
 

@@ -520,13 +520,34 @@ function toast(type, title, msg, ms=3500){
   wrap.appendChild(el);
   window.setTimeout(() => { if (el.isConnected) el.remove(); }, ms);
 }
-document.getElementById("loginForm").addEventListener("submit",(e)=>{
+// Login real contra /api/login (Juan Ruiz @eljuandaruiz).
+// Ya no se confía en el cliente: el servidor valida credenciales, rol,
+// intentos fallidos y abre la sesión segura de Flask.
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const usuario = document.getElementById("u").value.trim();
   const pass = document.getElementById("p").value;
-  if(!usuario || !pass){ toast("bad","Datos incompletos","Ingresa usuario y contraseña."); return; }
-  localStorage.setItem(LS_USER, JSON.stringify({usuario}));
-  window.location.href = "/dashboard";
+  if(!usuario || !pass){ alert("Ingresa usuario y contraseña."); return; }
+
+  try {
+    const resp = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario, password: pass }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok || !data.ok) {
+      alert(data.error || "No se pudo iniciar sesión.");
+      return;
+    }
+
+    // Guardamos solo datos públicos para mostrar en la interfaz.
+    localStorage.setItem(LS_USER, JSON.stringify(data.usuario));
+    window.location.href = "/dashboard";
+  } catch (err) {
+    alert("Error de conexión con el servidor.");
+  }
 });
 
 </script>
