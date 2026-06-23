@@ -12,7 +12,6 @@ PRODUCCION {
     int turno_id FK
     int zona_id FK
     int wbs_id FK
-    int diseno_id FK
     int receta_id FK
 }
 
@@ -53,17 +52,11 @@ WBS {
     string codigo
 }
 
-DISENO {
-    int diseno_id PK
-    string nombre
-}
-
 TURNO ||--o{ PRODUCCION : posee
 ZONA ||--o{ PRODUCCION : pertenece
 WBS ||--o{ PRODUCCION : asigna
-DISENO ||--o{ PRODUCCION : utiliza
 
-RECETA ||--o{ PRODUCCION : usa
+RECETA ||--o{ PRODUCCION : utiliza
 
 RECETA ||--|{ DETALLE_RECETA : contiene
 
