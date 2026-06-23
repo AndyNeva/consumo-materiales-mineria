@@ -1,0 +1,70 @@
+erDiagram
+
+PRODUCCION {
+    int produccion_id PK
+    date fecha
+    int numero_lote
+    decimal volumen_m3
+    decimal asentamiento
+    decimal temperatura
+    decimal arena_humedad
+
+    int turno_id FK
+    int zona_id FK
+    int wbs_id FK
+    int diseno_id FK
+    int receta_id FK
+}
+
+RECETA {
+    int receta_id PK
+    string nombre_receta
+}
+
+DETALLE_RECETA {
+    int detalle_id PK
+    int receta_id FK
+    int material_id FK
+    decimal cantidad
+}
+
+MATERIAL {
+    int material_id PK
+    string nombre
+    string unidad
+
+    decimal stock_minimo
+    decimal stock_maximo
+    decimal stock_actual
+}
+
+TURNO {
+    int turno_id PK
+    string nombre
+}
+
+ZONA {
+    int zona_id PK
+    string nombre
+}
+
+WBS {
+    int wbs_id PK
+    string codigo
+}
+
+DISENO {
+    int diseno_id PK
+    string nombre
+}
+
+TURNO ||--o{ PRODUCCION : posee
+ZONA ||--o{ PRODUCCION : pertenece
+WBS ||--o{ PRODUCCION : asigna
+DISENO ||--o{ PRODUCCION : utiliza
+
+RECETA ||--o{ PRODUCCION : usa
+
+RECETA ||--|{ DETALLE_RECETA : contiene
+
+MATERIAL ||--o{ DETALLE_RECETA : corresponde
