@@ -1,0 +1,51 @@
+classDiagram
+
+class PRODUCCION{
+    PK produccion_id
+    fecha
+    numero_lote
+    turno
+    zona
+    wbs
+    diseno
+    fuente_cemento
+    volumen_m3
+    asentamiento
+    temperatura
+    arena_humedad
+    FK receta_id
+}
+
+class RECETA{
+    PK receta_id
+    nombre_receta
+    diseno
+    unidad_base
+    descripcion
+
+    arena_kg
+    grava_kg
+    cemento_kg
+    agua_l
+
+    glenium_ml
+    silka_ml
+    rheo1000_ml
+    basf719_ml
+    masterglenium_7950_ml
+    masterglenium_7970_ml
+    fibras_kg
+}
+
+class MATERIALES{
+    PK material_id
+    nombre_material
+    unidad_medida
+    stock_minimo
+    stock_maximo
+    stock_actual
+}
+
+RECETA "1" <-- "N" PRODUCCION : utiliza
+
+RECETA "N" --> "M" MATERIALES : contiene
