@@ -7,8 +7,6 @@ Aquí vive todo lo relacionado con verificar credenciales:
 - Límite de intentos fallidos con bloqueo temporal por usuario/IP.
 - Consultas SIEMPRE parametrizadas (sin concatenar strings) -> anti SQL injection.
 
-Las medidas de cabeceras HTTP, rate limiting general y SECRET_KEY las maneja
-el líder del proyecto en app.py; aquí solo se COMPLEMENTAN.
 """
 
 from __future__ import annotations
@@ -17,6 +15,7 @@ import time
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from utils.db import conectar
+from utils.logging_seguridad import logger_seguridad
 
 # ---------------------------------------------------------------------------
 # Configuración del módulo
@@ -159,8 +158,12 @@ def autenticar(username: str, password: str, ip: str = "desconocida") -> dict:
     if not username or not password:
         return {"ok": False, "error": "Usuario y contraseña son obligatorios."}
 
-    # 2. Contraseña demasiado larga (no la hasheamos siquiera)
+    # 2. Contraseña demasiado larga
     if len(password) > MAX_LARGO_PASSWORD:
+        logger_seguridad.warning(
+            "Intento de login con password excesivamente largo | usuario=%s ip=%s",
+            username, ip
+        )
         return {
             "ok": False,
             "error": f"La contraseña no puede superar {MAX_LARGO_PASSWORD} caracteres.",
@@ -169,6 +172,10 @@ def autenticar(username: str, password: str, ip: str = "desconocida") -> dict:
     # 3. ¿Está bloqueado por demasiados intentos?
     bloqueado, restante = esta_bloqueado(username, ip)
     if bloqueado:
+        logger_seguridad.warning(
+            "Intento de login en cuenta bloqueada | usuario=%s ip=%s restante=%ss",
+            username, ip, restante
+        )
         minutos = max(1, restante // 60)
         return {
             "ok": False,
@@ -178,18 +185,22 @@ def autenticar(username: str, password: str, ip: str = "desconocida") -> dict:
 
     # 4. Verificar credenciales
     usuario = buscar_usuario(username)
-
-    # Verificamos el hash aunque el usuario no exista para no revelar
-    # (por tiempo de respuesta) si el username es válido o no.
     hash_guardado = usuario.get("password_hash") if usuario else None
     credenciales_ok = usuario is not None and verificar_password(password, hash_guardado)
 
     if not credenciales_ok:
         _registrar_fallo(username, ip)
+        logger_seguridad.warning(
+            "Login fallido | usuario=%s ip=%s", username, ip
+        )
         return {"ok": False, "error": "Usuario o contraseña incorrectos."}
 
-    # Éxito: limpiamos intentos y devolvemos datos públicos del usuario.
+    # Éxito
     _limpiar_intentos(username, ip)
+    logger_seguridad.info(
+        "Login exitoso | usuario=%s rol=%s ip=%s",
+        usuario["username"], usuario["rol"], ip
+    )
     return {
         "ok": True,
         "usuario": {
