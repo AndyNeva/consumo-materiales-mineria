@@ -494,9 +494,13 @@ tbody tr:hover{ background: rgba(79,140,255,.06); }
         <label for="u">Usuario</label>
         <input id="u" type="text" required placeholder="Ej: pteran" />
       </div>
-      <div class="field">
+      <div class="field" style="position:relative;">
         <label for="p">Contraseña</label>
-        <input id="p" type="password" required placeholder="••••••••" />
+        <input id="p" type="password" required placeholder="••••••••" style="padding-right:44px;" />
+        <button type="button" id="togglePass" aria-label="Mostrar contraseña"
+          style="position:absolute; right:8px; top:25px; background:none; border:0; color:var(--muted); cursor:pointer; font-size:16px; padding:4px;">
+          👁
+        </button>
       </div>
       <div class="row" style="justify-content:flex-end; margin-top:14px;">
         <button class="btn" type="submit">Ingresar</button>
@@ -520,6 +524,15 @@ function toast(type, title, msg, ms=3500){
   wrap.appendChild(el);
   window.setTimeout(() => { if (el.isConnected) el.remove(); }, ms);
 }
+
+const btnTogglePass = document.getElementById("togglePass");
+const inputPass = document.getElementById("p");
+btnTogglePass.addEventListener("click", () => {
+  const visible = inputPass.type === "text";
+  inputPass.type = visible ? "password" : "text";
+  btnTogglePass.textContent = visible ? "👁" : "🙈";
+  btnTogglePass.setAttribute("aria-label", visible ? "Mostrar contraseña" : "Ocultar contraseña");
+});
 // Login real contra /api/login (Juan Ruiz @eljuandaruiz).
 // Ya no se confía en el cliente: el servidor valida credenciales, rol,
 // intentos fallidos y abre la sesión segura de Flask.
@@ -544,6 +557,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
 
     // Guardamos solo datos públicos para mostrar en la interfaz.
     localStorage.setItem(LS_USER, JSON.stringify(data.usuario));
+    sessionStorage.setItem("ph_active_tab", "1");
     window.location.href = "/dashboard";
   } catch (err) {
     alert("Error de conexión con el servidor.");

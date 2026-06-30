@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request, Response, redirect, 
 import os
 import json
 import logging
+import time
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -27,7 +28,6 @@ if not app.secret_key:
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_NAME"] = "ph_session"
-app.config["PERMANENT_SESSION_LIFETIME"] = 3600
 
 # ===== RATE LIMITING =====
 limiter = Limiter(
@@ -36,6 +36,19 @@ limiter = Limiter(
     default_limits=[],          # sin límite global, solo donde lo apliquemos
     storage_uri="memory://"
 )
+
+# ===== TIMEOUT DE SESIÓN POR INACTIVIDAD =====
+INACTIVIDAD_MAX_SEGUNDOS = 15 * 60  # 15 minutos
+
+@app.before_request
+def verificar_inactividad():
+    if "usuario_id" in session:
+        ahora = time.time()
+        ultima = session.get("ultima_actividad", ahora)
+        if ahora - ultima > INACTIVIDAD_MAX_SEGUNDOS:
+            session.clear()  # sesión vencida por inactividad
+        else:
+            session["ultima_actividad"] = ahora
 
 logging.basicConfig(level=logging.INFO)
 
@@ -46,6 +59,10 @@ def agregar_headers_seguridad(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    rutas_protegidas = ("/dashboard", "/registro", "/inventario", "/historial", "/ml")
+    if request.path in rutas_protegidas or request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 # ===== RUTAS HTML =====
@@ -322,7 +339,7 @@ def api_login():
     session["usuario_id"] = usuario["id"]
     session["username"] = usuario["username"]
     session["rol"] = usuario["rol"]
-    session.permanent = True
+    session["ultima_actividad"] = time.time()
 
     return jsonify({"ok": True, "usuario": usuario})
 
