@@ -214,6 +214,7 @@
 
     logoutBtn.addEventListener("click", () => {
       localStorage.removeItem(LS_USER);
+      sessionStorage.removeItem("ph_active_tab");
       window.location.href = "/login";
     });
   }
