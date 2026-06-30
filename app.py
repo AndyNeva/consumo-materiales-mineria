@@ -6,10 +6,12 @@ import time
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf import CSRFProtect
+from flask_wtf.csrf import generate_csrf
 from auth.roles import cualquier_usuario, solo_admin, admin_u_operador
 from auth.login import autenticar
 from utils.db import conectar, RUTA_BD
-from utils.logging_seguridad import configurar_logging, logger_seguridad   # <-- nuevo
+from utils.logging_seguridad import configurar_logging, logger_seguridad
 from services.dashboard import consumo_diario, registros_ultima_semana
 from services.despachos import insertar_despacho, _receta_por_diseno, _calcular_consumos_estimados
 from services.historial import obtener_historial_consumo, cruce_consumo_por_rango
@@ -24,6 +26,9 @@ app.secret_key = os.getenv("SECRET_KEY")
 if not app.secret_key:
     raise RuntimeError("SECRET_KEY no definida. Revisa tu archivo .env")
 
+# ===== CSRF PROTECTION =====
+csrf = CSRFProtect(app)
+
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_NAME"] = "ph_session"
@@ -35,7 +40,7 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-# ===== TAREA 13: logging centralizado =====
+# ===== Logging centralizado =====
 configurar_logging()
 
 # Mensaje genérico reutilizable
@@ -96,6 +101,14 @@ def inventario():
 @admin_u_operador
 def historial():
     return render_template("historial.html")
+
+# ===== API CSRF =====
+
+@app.route("/api/csrf-token")
+@cualquier_usuario
+def api_csrf_token():
+    """Entrega el token CSRF actual para que el frontend lo use en POSTs."""
+    return jsonify({"csrf_token": generate_csrf()})
 
 # ===== API DASHBOARD =====
 
@@ -322,6 +335,7 @@ def api_cruce_consumo_registro():
 
 # ===== API LOGIN =====
 @app.route("/api/login", methods=["POST"])
+@csrf.exempt
 @limiter.limit("5 per minute")
 def api_login():
     """
