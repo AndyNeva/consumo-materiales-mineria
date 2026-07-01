@@ -38,72 +38,103 @@ def crear_esquema():
         )
     ''')
 
-    # Tabla de materiales
+    # Tabla de insumos (Materiales)
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS materiales (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT UNIQUE,
-            unidad TEXT
+        CREATE TABLE IF NOT EXISTS Insumos (
+            id_insumo INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre_insumo TEXT UNIQUE NOT NULL,
+            unidad TEXT,
+            stock_minimo REAL DEFAULT 0,
+            stock_maximo REAL DEFAULT 0,
+            stock_actual REAL DEFAULT 0
         )
     ''')
 
-# --- AGREGAR COLUMNAS DE INVENTARIO A MATERIALES ---
-# Estas columnas forman parte del inventario
-# Si ya existen, SQLite lanzará error y lo ignoramos
-
-    for columna, definicion in [
-        ("stock_minimo", "REAL DEFAULT 0"),
-        ("stock_maximo", "REAL DEFAULT 0"),
-        ("stock_actual", "REAL DEFAULT 0")
-    ]:
-        try:
-            cursor.execute(f"ALTER TABLE materiales ADD COLUMN {columna} {definicion}")
-            print(f"Columna {columna} agregada a materiales.")
-        except sqlite3.OperationalError:
-            # La columna ya existe
-            pass
     # Tabla de movimientos de inventario
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS movimientos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             usuario_id INTEGER,
-            material_id INTEGER,
+            id_insumo INTEGER,
             cantidad REAL,
             fecha TEXT,
             tipo TEXT,
             proveedor TEXT,
-            detalle TEXT
+            detalle TEXT,
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+            FOREIGN KEY (id_insumo) REFERENCES Insumos(id_insumo)
         )
     ''')
 
-    # Tabla de despachos (producción)
+    # Tabla de Zonas (Catálogo)
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS despachos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fecha TEXT,
-            fuente_cemento TEXT,
+        CREATE TABLE IF NOT EXISTS Zonas (
+            id_zona INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre_zona TEXT UNIQUE NOT NULL
+        )
+    ''')
+
+    # Tabla de Centros de Costo (Catálogo)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Centros_Costo (
+            id_cc INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo_cc TEXT UNIQUE NOT NULL
+        )
+    ''')
+
+    # Tabla de Diseños de Mezcla (Recetas cabecera)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Disenos_Mezcla (
+            diseno_mezcla TEXT PRIMARY KEY
+        )
+    ''')
+
+    # Tabla de Receta Detalle (Ingredientes de las recetas)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Receta_Detalle (
+            id_receta INTEGER PRIMARY KEY AUTOINCREMENT,
             diseno_mezcla TEXT,
-            lote TEXT,
-            zona TEXT,
-            wbs TEXT,
+            id_insumo INTEGER,
+            cantidad_requerida REAL,
+            UNIQUE(diseno_mezcla, id_insumo),
+            FOREIGN KEY (diseno_mezcla) REFERENCES Disenos_Mezcla(diseno_mezcla) ON DELETE CASCADE,
+            FOREIGN KEY (id_insumo) REFERENCES Insumos(id_insumo)
+        )
+    ''')
+
+    # Tabla de Producción Diaria (Cabecera de despachos/lotes)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Produccion_Diaria (
+            id_produccion INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha TEXT NOT NULL,
+            lote_numero TEXT,
             volumen_m3 REAL,
-            turno TEXT,
+            diseno_mezcla TEXT,
+            id_zona INTEGER,
+            id_cc INTEGER,
             arena_humedad_pct REAL,
             asentamiento_final_cm REAL,
             temperatura_c REAL,
-            arena_kg REAL,
-            grava_kg REAL,
-            cemento_kg REAL,
-            agua_kg REAL,
-            aditivo_rheo_sika115 REAL,
-            aditivo_basf_sika200 REAL,
-            aditivo_delvo REAL,
-            aditivo_glenium_7950 REAL,
-            aditivo_glenium_7970 REAL,
-            aditivo_fibras REAL
+            turno TEXT,
+            FOREIGN KEY (diseno_mezcla) REFERENCES Disenos_Mezcla(diseno_mezcla),
+            FOREIGN KEY (id_zona) REFERENCES Zonas(id_zona),
+            FOREIGN KEY (id_cc) REFERENCES Centros_Costo(id_cc)
         )
     ''')
-    #tabla de demanda
+
+    # Tabla de Producción Insumos (Consumos reales de cada despacho)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Produccion_Insumos (
+            id_produccion INTEGER,
+            id_insumo INTEGER,
+            cantidad_real REAL,
+            PRIMARY KEY (id_produccion, id_insumo),
+            FOREIGN KEY (id_produccion) REFERENCES Produccion_Diaria(id_produccion) ON DELETE CASCADE,
+            FOREIGN KEY (id_insumo) REFERENCES Insumos(id_insumo)
+        )
+    ''')
+
+    # Tabla de demanda diaria
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS daily_demand (
             date TEXT PRIMARY KEY,
@@ -111,42 +142,9 @@ def crear_esquema():
         )
     ''')
 
-    # Tabla de recetas
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS recetas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo_diseno TEXT UNIQUE,
-            cemento_kg REAL,
-            arena_kg REAL,
-            grava_kg REAL,
-            agua_kg REAL,
-            aditivo_a REAL DEFAULT 0,
-            aditivo_b REAL DEFAULT 0,
-            aditivo_delvo REAL DEFAULT 0,
-            aditivo_glenium_7950 REAL DEFAULT 0,
-            aditivo_glenium_7970 REAL DEFAULT 0,
-            aditivo_fibras REAL DEFAULT 0
-        )
-    ''')
-
-    # Catálogos
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS centros_costos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo TEXT UNIQUE
-        )
-    ''')
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS zonas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT UNIQUE
-        )
-    ''')
-
     conexion.commit()
     conexion.close()
-    print("Esquema creado correctamente.")
+    print("Esquema relacional creado correctamente.")
 
 
 if __name__ == "__main__":
