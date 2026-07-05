@@ -115,7 +115,11 @@
       btnGuardar.title = "";
     }
   }
-
+  async function obtenerCsrfToken(){
+  const res = await fetch("/api/csrf-token");
+  const data = await res.json();
+  return data.csrf_token;
+  }
   async function guardarDespacho(e){
     e.preventDefault();
 

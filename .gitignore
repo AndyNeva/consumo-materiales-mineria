@@ -20,3 +20,4 @@ venv/
 
 # Archivos temporales
 *.log
+seguridad.log
