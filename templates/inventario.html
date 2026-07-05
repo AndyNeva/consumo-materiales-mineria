@@ -11,174 +11,217 @@
 <title>Inventario | Planta de Hormigón</title>
 
 <style>
+:root{
+  --bg:#0b1220;
+  --surface:#0f1a2e;
+  --surface2:#0c1628;
+  --card:#101f37;
+  --border:rgba(255,255,255,.08);
+  --muted:rgba(255,255,255,.72);
+  --text:rgba(255,255,255,.92);
+  --accent:#4f8cff;
+  --good:#22c55e;
+  --warn:#f59e0b;
+  --bad:#ef4444;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+  --radius:16px;
+  --radius2:22px;
+  --sans:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+}
 *{box-sizing:border-box}
 body{
   margin:0;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-  color:#e6edf7;
+  font-family:var(--sans);
+  color:var(--text);
   background:
-    radial-gradient(1200px 800px at 20% -10%, #1b3a6b 0%, #0b1220 45%, #050914 100%);
+    radial-gradient(1200px 600px at 15% 10%, rgba(79,140,255,.25), transparent 60%),
+    radial-gradient(900px 500px at 85% 20%, rgba(121,167,255,.18), transparent 55%),
+    radial-gradient(900px 600px at 55% 95%, rgba(34,197,94,.10), transparent 60%),
+    linear-gradient(180deg, var(--bg), #070b14 70%);
 }
-
-/* ===== LAYOUT ===== */
-.app{
-  display:grid;
-  grid-template-columns:260px 1fr;
-  min-height:100vh;
-}
-
-/* ===== SIDEBAR ===== */
+a{color:inherit;text-decoration:none}
+.app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
 aside{
   padding:20px;
-  background:linear-gradient(180deg,rgba(20,33,61,.95),rgba(8,14,30,.95));
+  background:linear-gradient(180deg,rgba(15,26,46,.95),rgba(12,22,40,.88));
+  border-right:1px solid var(--border);
   display:flex;
   flex-direction:column;
 }
-.brand{
-  font-weight:600;
-  margin-bottom:4px;
-}
-.brand-sub{
-  opacity:.7;
-  font-size:14px;
-  margin-bottom:18px;
-}
+.brand{font-weight:700;margin-bottom:4px}
+.brand-sub{opacity:.72;font-size:13px;margin-bottom:18px}
+.nav{display:flex;flex-direction:column;gap:8px}
 .nav a{
   display:flex;
   align-items:center;
   gap:10px;
   padding:10px 14px;
-  margin-bottom:6px;
   border-radius:12px;
   color:#e6edf7;
-  text-decoration:none;
   background:rgba(255,255,255,.02);
+  border:1px solid transparent;
 }
-.nav a.active{
-  background:linear-gradient(90deg,#1f3b6d,#162a4f);
-}
-.nav a:hover{
-  background:rgba(255,255,255,.06);
-}
-.logout{
-  margin-top:auto;
-}
+.nav a.active{background:linear-gradient(90deg,#1f3b6d,#162a4f);border-color:rgba(79,140,255,.35)}
+.nav a:hover{background:rgba(255,255,255,.06)}
+.logout{margin-top:auto}
 .logout button{
   width:100%;
   padding:10px;
   border-radius:14px;
-  border:0;
-  background:#7f1d1d;
+  border:1px solid rgba(239,68,68,.25);
+  background:rgba(239,68,68,.12);
   color:#fff;
   cursor:pointer;
+  font-weight:700;
 }
-.logout button:hover{background:#991b1b}
-
-/* ===== MAIN ===== */
-main{
-  padding:24px 28px;
-}
-h1{margin:0 0 6px}
-.subtitle{opacity:.7;margin-bottom:18px}
-
+.logout button:hover{background:rgba(239,68,68,.2)}
+main{padding:24px 28px 40px}
+h1{margin:0 0 6px;font-size:26px}
+.subtitle{opacity:.72;margin-bottom:18px;line-height:1.4}
+.grid{display:grid;grid-template-columns:1fr;gap:16px}
 .card{
-  background:linear-gradient(180deg,rgba(20,33,61,.85),rgba(10,18,35,.85));
-  border-radius:18px;
-  padding:14px;
+  background:linear-gradient(180deg,rgba(20,33,61,.88),rgba(10,18,35,.9));
+  border:1px solid var(--border);
+  box-shadow:var(--shadow);
+  border-radius:var(--radius2);
+  padding:16px;
 }
-
-/* ===== TABLE ===== */
-table{
+.card h2{font-size:17px;margin:0 0 14px}
+.form-grid{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr)) auto;gap:12px;align-items:end}
+.field{display:flex;flex-direction:column;gap:6px}
+label{font-size:12px;color:var(--muted)}
+input,select{
   width:100%;
-  border-collapse:collapse;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.04);
+  color:var(--text);
+  border-radius:12px;
+  padding:10px 12px;
+  outline:none;
 }
+input::placeholder{color:rgba(255,255,255,.42)}
+input:focus,select:focus{border-color:rgba(79,140,255,.45);box-shadow:0 0 0 4px rgba(79,140,255,.16)}
+select option{background:#0f1a2e;color:#e6edf7}
+.actions{display:flex;gap:8px;align-items:center}
+.btn{
+  background:#1f3b6d;
+  color:#fff;
+  border:1px solid rgba(255,255,255,.08);
+  padding:9px 14px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:700;
+  white-space:nowrap;
+}
+.btn:hover{background:#2a4c88}
+.btn.secondary{background:rgba(255,255,255,.05)}
+.btn.secondary:hover{background:rgba(255,255,255,.1)}
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius);background:rgba(255,255,255,.02)}
+table{width:100%;border-collapse:collapse;min-width:920px}
 thead th{
   text-align:left;
   padding:12px;
   background:linear-gradient(180deg,rgba(40,64,110,.9),rgba(28,46,86,.9));
+  font-size:13px;
 }
-tbody td{
-  padding:12px;
-  border-top:1px solid rgba(255,255,255,.08);
+tbody td{padding:12px;border-top:1px solid rgba(255,255,255,.08)}
+tbody tr:nth-child(even){background:rgba(10,18,35,.6)}
+.badge{padding:4px 10px;border-radius:999px;font-size:12px;display:inline-block;font-weight:800}
+.ok{background:rgba(34,197,94,.18);color:#4ade80}
+.low{background:rgba(245,158,11,.18);color:#fbbf24}
+.empty{color:var(--muted);padding:16px}
+.status{margin-top:12px;min-height:20px;color:var(--muted);font-size:13px}
+.status.ok-text{color:#86efac}.status.err-text{color:#fecaca}
+@media (max-width:980px){
+  .app{grid-template-columns:1fr}
+  aside{position:relative;min-height:auto}
+  .form-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}
 }
-tbody tr:nth-child(even){
-  background:rgba(10,18,35,.6);
-}
-
-/* ===== BADGES ===== */
-.badge{
-  padding:4px 10px;
-  border-radius:999px;
-  font-size:12px;
-  display:inline-block;
-}
-.ok{
-  background:rgba(34,197,94,.18);
-  color:#4ade80;
-}
-.low{
-  background:rgba(245,158,11,.18);
-  color:#f59e0b;
-}
-
-/* ===== BUTTON ===== */
-.btn{
-  background:#1f3b6d;
-  color:#fff;
-  border:0;
-  padding:6px 14px;
-  border-radius:12px;
-  cursor:pointer;
-}
-.btn:hover{background:#2a4c88}
 </style>
 </head>
 
 <body>
 <div class="app">
+  <aside>
+    <div class="brand">Planta de Hormigón</div>
+    <div class="brand-sub">Control de producción & inventario</div>
 
-<!-- ===== SIDEBAR ===== -->
-<aside>
-  <div class="brand">Planta de Hormigón</div>
-  <div class="brand-sub">Control de producción & inventario</div>
+    <nav class="nav">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/registro">Registro diario</a>
+      <a href="/inventario" class="active">Inventario</a>
+      <a href="/historial">Historial</a>
+    </nav>
 
-  <nav class="nav">
-    <a href="/dashboard">Dashboard</a>
-    <a href="/registro">Registro diario</a>
-    <a href="/inventario" class="active">Inventario</a>
-    <a href="/historial">Historial</a>
-    <a href="/graficas">Gráficas</a>
-  </nav>
+    <div class="logout">
+      <button id="btnLogout" type="button">Cerrar sesión</button>
+    </div>
+  </aside>
 
-  <div class="logout">
-    <button type="button">Cerrar sesión</button>
-  </div>
-</aside>
+  <main>
+    <h1>Inventario</h1>
+    <div class="subtitle">
+      Administra materiales, stock actual, mínimos y máximos. El estado se actualiza automáticamente según el mínimo configurado.
+    </div>
 
-<!-- ===== MAIN ===== -->
-<main>
-  <h1>Inventario</h1>
-  <div class="subtitle">
-    Administra materiales, mínimos y stocks. El estado cambia automáticamente.
-  </div>
+    <div class="grid">
+      <section class="card">
+        <h2>Ingresar nuevo material</h2>
+        <form id="formNuevoMaterial" class="form-grid">
+          <div class="field">
+            <label for="nombre">Material</label>
+            <input id="nombre" name="nombre" type="text" placeholder="Ej: Cemento" required />
+          </div>
+          <div class="field">
+            <label for="unidad">Unidad</label>
+            <select id="unidad" name="unidad" required>
+              <option value="kg">kg</option>
+              <option value="l">l</option>
+              <option value="m3">m³</option>
+              <option value="unidad">unidad</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="stock_actual">Stock actual</label>
+            <input id="stock_actual" name="stock_actual" type="number" step="0.01" min="0" value="0" required />
+          </div>
+          <div class="field">
+            <label for="stock_minimo">Mínimo</label>
+            <input id="stock_minimo" name="stock_minimo" type="number" step="0.01" min="0" value="0" required />
+          </div>
+          <div class="field">
+            <label for="stock_maximo">Máximo</label>
+            <input id="stock_maximo" name="stock_maximo" type="number" step="0.01" min="0" value="0" required />
+          </div>
+          <div class="actions">
+            <button class="btn" type="submit">Guardar material</button>
+          </div>
+        </form>
+        <div id="formStatus" class="status"></div>
+      </section>
 
-  <div class="card">
-    <table>
-      <thead>
-        <tr>
-          <th>Material</th>
-          <th>Unidad</th>
-          <th>Stock actual</th>
-          <th>Mínimo</th>
-          <th>Estado</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
-  </div>
-</main>
-
+      <section class="card">
+        <h2>Materiales registrados</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Material</th>
+                <th>Unidad</th>
+                <th>Stock actual</th>
+                <th>Mínimo</th>
+                <th>Máximo</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div id="tablaStatus" class="status"></div>
+      </section>
+    </div>
+  </main>
 </div>
 
 <script>
@@ -186,76 +229,184 @@ tbody tr:nth-child(even){
 
 let data = [];
 
+const $ = (id) => document.getElementById(id);
+
+function escapeHtml(value){
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
+
+function numero(value){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fmt(value){
+  return numero(value).toLocaleString("es-EC", { maximumFractionDigits: 2 });
+}
+
+function setStatus(id, texto, tipo){
+  const el = $(id);
+  if(!el) return;
+  el.textContent = texto || "";
+  el.className = "status" + (tipo ? ` ${tipo}` : "");
+}
+
 function estado(it){
-  if(Number(it.stock_actual) <= Number(it.stock_minimo)) return {t:"Bajo",c:"low"};
+  if(numero(it.stock_actual) <= numero(it.stock_minimo)) return {t:"Bajo",c:"low"};
   return {t:"OK",c:"ok"};
 }
 
 async function cargarMateriales(){
   try {
+    setStatus("tablaStatus", "Cargando inventario...");
     const res = await fetch("/api/materiales");
     const json = await res.json();
     if(json.ok){
-      data = json.materiales;
+      data = Array.isArray(json.materiales) ? json.materiales : [];
       render();
+      setStatus("tablaStatus", data.length ? `Materiales cargados: ${data.length}` : "Sin materiales registrados", "ok-text");
     } else {
-      alert("Error al cargar materiales: " + (json.error || ""));
+      setStatus("tablaStatus", "Error al cargar materiales: " + (json.error || ""), "err-text");
     }
   } catch(err){
     console.error(err);
-    alert("Error de red al cargar materiales");
+    setStatus("tablaStatus", "Error de red al cargar materiales", "err-text");
   }
 }
 
 function render(){
-  const tb=document.getElementById("tbody");
-  tb.innerHTML="";
+  const tb = $("tbody");
+  tb.innerHTML = "";
+
+  if(!data.length){
+    tb.innerHTML = `<tr><td colspan="7" class="empty">Sin materiales registrados.</td></tr>`;
+    return;
+  }
+
   data.forEach((it,i)=>{
-    const e=estado(it);
-    tb.innerHTML+=`
+    const e = estado(it);
+    tb.insertAdjacentHTML("beforeend", `
       <tr>
-        <td>${it.nombre}</td>
-        <td>${it.unidad}</td>
-        <td>${it.stock_actual}</td>
-        <td>${it.stock_minimo}</td>
+        <td>${escapeHtml(it.nombre)}</td>
+        <td>${escapeHtml(it.unidad)}</td>
+        <td>${fmt(it.stock_actual)}</td>
+        <td>${fmt(it.stock_minimo)}</td>
+        <td>${fmt(it.stock_maximo)}</td>
         <td><span class="badge ${e.c}">${e.t}</span></td>
-        <td><button class="btn" onclick="edit(${i})">Editar</button></td>
-      </tr>`;
+        <td><button class="btn secondary" type="button" data-edit-index="${i}">Editar min / max</button></td>
+      </tr>`);
   });
 }
 
-async function edit(i){
-  const material = data[i];
-  const s=prompt("Nuevo stock:",material.stock_actual);
-  const m=prompt("Nuevo mínimo:",material.stock_minimo);
-  
-  if(s===null || m===null) return;
-  
-  try {
+async function guardarMaterialNuevo(event){
+  event.preventDefault();
+  const payload = {
+    nombre: $("nombre").value.trim(),
+    unidad: $("unidad").value.trim(),
+    stock_actual: numero($("stock_actual").value),
+    stock_minimo: numero($("stock_minimo").value),
+    stock_maximo: numero($("stock_maximo").value)
+  };
+
+  if(!payload.nombre){
+    setStatus("formStatus", "Ingrese el nombre del material", "err-text");
+    return;
+  }
+  if(payload.stock_maximo && payload.stock_maximo < payload.stock_minimo){
+    setStatus("formStatus", "El máximo no puede ser menor que el mínimo", "err-text");
+    return;
+  }
+
+  try{
+    setStatus("formStatus", "Guardando material...");
     const res = await fetch("/api/materiales", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        id: material.id,
-        stock_actual: Number(s),
-        stock_minimo: Number(m)
-      })
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
     });
-    
-    const json = await res.json();
-    if(json.ok){
-      // Recargar datos
-      await cargarMateriales();
-    } else {
-      alert("Error al actualizar: " + (json.error || ""));
+    const json = await res.json().catch(() => ({}));
+    if(!res.ok || !json.ok){
+      setStatus("formStatus", "Error al guardar: " + (json.error || `HTTP ${res.status}`), "err-text");
+      return;
     }
-  } catch(err){
+    $("formNuevoMaterial").reset();
+    $("stock_actual").value = 0;
+    $("stock_minimo").value = 0;
+    $("stock_maximo").value = 0;
+    setStatus("formStatus", "Material creado correctamente", "ok-text");
+    await cargarMateriales();
+  }catch(err){
     console.error(err);
-    alert("Error de red al actualizar");
+    setStatus("formStatus", "Error de red al guardar material", "err-text");
   }
 }
 
-// Cargar al iniciar
+async function editarMinMax(i){
+  const material = data[i];
+  if(!material) return;
+
+  const min = prompt(`Nuevo mínimo para ${material.nombre}:`, material.stock_minimo);
+  if(min === null) return;
+  const max = prompt(`Nuevo máximo para ${material.nombre}:`, material.stock_maximo);
+  if(max === null) return;
+
+  const minNum = numero(min);
+  const maxNum = numero(max);
+  if(maxNum && maxNum < minNum){
+    setStatus("tablaStatus", "El máximo no puede ser menor que el mínimo", "err-text");
+    return;
+  }
+
+  try {
+    setStatus("tablaStatus", "Actualizando mínimos y máximos...");
+    const res = await fetch("/api/materiales", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        id: material.id,
+        stock_minimo: minNum,
+        stock_maximo: maxNum
+      })
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if(!res.ok || !json.ok){
+      setStatus("tablaStatus", "Error al actualizar: " + (json.error || `HTTP ${res.status}`), "err-text");
+      return;
+    }
+    setStatus("tablaStatus", "Material actualizado correctamente", "ok-text");
+    await cargarMateriales();
+  } catch(err){
+    console.error(err);
+    setStatus("tablaStatus", "Error de red al actualizar", "err-text");
+  }
+}
+
+function wireEvents(){
+  const form = $("formNuevoMaterial");
+  if(form) form.addEventListener("submit", guardarMaterialNuevo);
+
+  const tbody = $("tbody");
+  if(tbody){
+    tbody.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-edit-index]");
+      if(!btn) return;
+      editarMinMax(Number(btn.dataset.editIndex));
+    });
+  }
+
+  const logout = $("btnLogout");
+  if(logout){
+    logout.addEventListener("click", () => {
+      localStorage.removeItem("ph_user");
+      window.location.href = "/logout";
+    });
+  }
+}
+
+wireEvents();
 cargarMateriales();
 </script>
 </body>

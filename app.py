@@ -15,7 +15,7 @@ from utils.logging_seguridad import configurar_logging, logger_seguridad
 from services.dashboard import consumo_diario, registros_ultima_semana
 from services.despachos import insertar_despacho, _receta_por_diseno, _calcular_consumos_estimados
 from services.historial import obtener_historial_consumo, cruce_consumo_por_rango
-from services.inventario import obtener_materiales, actualizar_material, cruzar_consumo_vs_stock
+from services.inventario import obtener_materiales, actualizar_material, agregar_material, cruzar_consumo_vs_stock
 
 load_dotenv()
 
@@ -60,6 +60,19 @@ def verificar_inactividad():
 
 logging.basicConfig(level=logging.INFO)
 
+
+def numero_no_negativo(valor, nombre_campo):
+    """Convierte un valor a float y valida que no sea negativo."""
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        raise ValueError(f"{nombre_campo} debe ser un número válido")
+    if numero < 0:
+        raise ValueError(f"{nombre_campo} no puede ser negativo")
+    return numero
+
+
+# ===== HEADERS DE SEGURIDAD =====
 @app.after_request
 def agregar_headers_seguridad(response):
     response.headers["X-Frame-Options"] = "DENY"
@@ -242,6 +255,12 @@ def api_historial_consumo():
 @app.route("/api/materiales", methods=["GET", "POST"])
 @admin_u_operador
 def api_materiales():
+    """Gestión de inventario de materiales.
+
+    GET devuelve el inventario completo. POST crea un material nuevo si no
+    recibe id, o actualiza el material existente cuando recibe id. Las acciones
+    de creación/edición se mantienen restringidas al rol Admin.
+    """
     if request.method == "GET":
         try:
             return jsonify({"ok": True, "materiales": obtener_materiales(ruta_bd=RUTA_BD)})
@@ -254,18 +273,63 @@ def api_materiales():
             "Intento de edición de inventario sin rol Admin | usuario=%s rol=%s ip=%s",
             session.get("username"), session.get("rol"), request.remote_addr
         )
-        return jsonify({"ok": False, "error": "Solo el Administrador puede editar el inventario"}), 403
+        return jsonify({"ok": False, "error": "Solo el Administrador puede crear o editar el inventario"}), 403
 
     try:
         datos = request.get_json(force=True) or {}
         material_id = datos.get("id")
+
+        # Crear nuevo material.
         if not material_id:
-            return jsonify({"ok": False, "error": "Falta el ID del material"}), 400
+            nombre = str(datos.get("nombre", "")).strip()
+            unidad = str(datos.get("unidad", "")).strip()
+
+            if not nombre:
+                return jsonify({"ok": False, "error": "Falta el nombre del material"}), 400
+            if not unidad:
+                return jsonify({"ok": False, "error": "Falta la unidad del material"}), 400
+
+            stock_actual = numero_no_negativo(datos.get("stock_actual", 0), "Stock actual")
+            stock_minimo = numero_no_negativo(datos.get("stock_minimo", 0), "Stock mínimo")
+            stock_maximo = numero_no_negativo(datos.get("stock_maximo", 0), "Stock máximo")
+
+            if stock_maximo and stock_maximo < stock_minimo:
+                return jsonify({"ok": False, "error": "El stock máximo no puede ser menor que el mínimo"}), 400
+
+            nuevo_id = agregar_material(
+                nombre=nombre,
+                unidad=unidad,
+                stock_actual=stock_actual,
+                stock_minimo=stock_minimo,
+                stock_maximo=stock_maximo,
+                ruta_bd=RUTA_BD,
+            )
+
+            if not nuevo_id:
+                return jsonify({"ok": False, "error": "No se pudo crear el material"}), 400
+
+            return jsonify({"ok": True, "id": nuevo_id, "mensaje": "Material creado"}), 201
+
+        # Actualizar mínimos y máximos de un material existente.
+        stock_actual = datos.get("stock_actual")
+        stock_minimo = datos.get("stock_minimo")
+        stock_maximo = datos.get("stock_maximo")
+
+        if stock_actual is not None:
+            stock_actual = numero_no_negativo(stock_actual, "Stock actual")
+        if stock_minimo is not None:
+            stock_minimo = numero_no_negativo(stock_minimo, "Stock mínimo")
+        if stock_maximo is not None:
+            stock_maximo = numero_no_negativo(stock_maximo, "Stock máximo")
+
+        if stock_minimo is not None and stock_maximo is not None and stock_maximo and stock_maximo < stock_minimo:
+            return jsonify({"ok": False, "error": "El stock máximo no puede ser menor que el mínimo"}), 400
 
         actualizado = actualizar_material(
             material_id=material_id,
-            stock_actual=datos.get("stock_actual"),
-            stock_minimo=datos.get("stock_minimo"),
+            stock_actual=stock_actual,
+            stock_minimo=stock_minimo,
+            stock_maximo=stock_maximo,
             ruta_bd=RUTA_BD,
         )
         if not actualizado:
@@ -276,9 +340,16 @@ def api_materiales():
             material_id, session.get("username"), request.remote_addr, datos
         )
         return jsonify({"ok": True, "mensaje": "Material actualizado"})
-    except Exception:
+
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        mensaje = str(e)
+        if "UNIQUE constraint failed" in mensaje:
+            return jsonify({"ok": False, "error": "Ya existe un material con ese nombre"}), 409
         logging.exception("Error en POST /api/materiales")
-        return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
+        return jsonify({"ok": False, "error": mensaje}), 500
+
 
 # ===== API RESUMEN CONSUMO =====
 
@@ -300,10 +371,43 @@ def api_resumen_consumo():
             wbs=request.args.get("wbs") or None,
             ruta_bd=RUTA_BD,
         )
-        return jsonify({"ok": True, "resumen": resumen})
-    except Exception:
+        return jsonify({"ok": True, "resumen": resumen, "total_registros": resumen.get("registros", 0)})
+    except Exception as e:
         logging.exception("Error en /api/resumen_consumo")
         return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
+
+# ===== API ALERTAS CONSUMO =====
+
+@app.route("/api/alertas_consumo")
+@login_required
+def api_alertas_consumo():
+    """Cruza el consumo filtrado del historial contra el stock disponible."""
+    inicio = request.args.get("inicio")
+    fin = request.args.get("fin")
+
+    if not inicio or not fin:
+        return jsonify({"ok": False, "error": "Debes enviar inicio y fin"}), 400
+
+    try:
+        resumen = cruce_consumo_por_rango(
+            inicio, fin,
+            diseno=request.args.get("diseno") or None,
+            zona=request.args.get("zona") or None,
+            turno=request.args.get("turno") or None,
+            wbs=request.args.get("wbs") or None,
+            ruta_bd=RUTA_BD,
+        )
+        filas, no_mapeados, no_encontrados = cruzar_consumo_vs_stock(resumen, ruta_bd=RUTA_BD)
+        return jsonify({
+            "ok": True,
+            "filas": filas,
+            "no_mapeados": no_mapeados,
+            "no_encontrados": no_encontrados,
+            "total_registros": resumen.get("registros", 0),
+        })
+    except Exception as e:
+        logging.exception("Error en /api/alertas_consumo")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 # ===== API CRUCE CONSUMO VS STOCK =====
 
