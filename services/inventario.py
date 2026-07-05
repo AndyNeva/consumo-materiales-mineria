@@ -44,6 +44,7 @@ def actualizar_material(
     material_id: int,
     stock_actual: Optional[float] = None,
     stock_minimo: Optional[float] = None,
+    stock_maximo: Optional[float] = None,
     ruta_bd: str = RUTA_BD,
 ) -> bool:
     """
@@ -53,6 +54,7 @@ def actualizar_material(
         material_id (int): ID del material a actualizar.
         stock_actual (float): Nuevo stock actual (opcional).
         stock_minimo (float): Nuevo stock mínimo (opcional).
+        stock_maximo (float): Nuevo stock máximo (opcional).
         ruta_bd (str): Ruta a la base de datos.
 
     Returns:
@@ -68,6 +70,10 @@ def actualizar_material(
     if stock_minimo is not None:
         actualizaciones.append("stock_minimo = ?")
         parametros.append(float(stock_minimo))
+
+    if stock_maximo is not None:
+        actualizaciones.append("stock_maximo = ?")
+        parametros.append(float(stock_maximo))
 
     if not actualizaciones:
         return False
@@ -103,6 +109,11 @@ def agregar_material(
     Returns:
         int | None: ID del material insertado o None si falló.
     """
+    nombre = (nombre or "").strip()
+    unidad = (unidad or "").strip()
+    if not nombre or not unidad:
+        return None
+
     with conectar(ruta_bd) as conexion:
         cursor = conexion.execute(
             """
@@ -191,8 +202,13 @@ def cruzar_consumo_vs_stock(
             else:
                 stock  = float_seguro(valor_fila(material, "stock_actual", 0.0))
                 minimo = float_seguro(valor_fila(material, "stock_minimo", 0.0))
+                maximo = float_seguro(valor_fila(material, "stock_maximo", 0.0))
+
+            if not material:
+                maximo = 0.0
 
             saldo = stock - consumo
+            deficit_sugerido = abs(saldo) if saldo < 0 else 0.0
             bajo_minimo = (stock < minimo) if minimo > 0 else False
 
             estado = "OK"
@@ -206,8 +222,10 @@ def cruzar_consumo_vs_stock(
                 "unidad":           unidad,
                 "stock_actual":     stock,
                 "minimo":           minimo,
+                "maximo":           maximo,
                 "consumo_estimado": consumo,
                 "saldo":            saldo,
+                "deficit_sugerido": deficit_sugerido,
                 "bajo_minimo":      bajo_minimo,
                 "estado":           estado,
             })

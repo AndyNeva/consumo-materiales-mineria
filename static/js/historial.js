@@ -53,7 +53,7 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${r.fecha ?? ""}</td>
-        <td>${r.diseno ?? ""}</td>
+        <td>${r.diseno_mezcla ?? r.diseno ?? ""}</td>
         <td>${r.zona ?? ""}</td>
         <td>${r.wbs ?? ""}</td>
         <td>${r.turno ?? ""}</td>
@@ -193,28 +193,6 @@
     box.style.display = "block";
   }
 
-  function actualizarLinkGraficas() {
-    const btn = $("btnGraficas");
-    if (!btn) return;
-
-    const inicio = ($("inicio")?.value || "").trim();
-    const fin = ($("fin")?.value || "").trim();
-    const diseno = ($("diseno")?.value || "").trim();
-    const zona = ($("zona")?.value || "").trim();
-    const turno = ($("turno")?.value || "").trim();
-    const wbs = ($("wbs")?.value || "").trim();
-
-    const params = new URLSearchParams();
-    if (inicio) params.set("inicio", inicio);
-    if (fin) params.set("fin", fin);
-    if (diseno) params.set("diseno", diseno);
-    if (zona) params.set("zona", zona);
-    if (turno) params.set("turno", turno);
-    if (wbs) params.set("wbs", wbs);
-
-    const qs = params.toString();
-    btn.setAttribute("href", qs ? `/graficas?${qs}` : "/graficas");
-  }
 
   async function buscarConConsumoYAlertas(e) {
     e.preventDefault();
@@ -231,7 +209,6 @@
 
     if (!inicio || !fin) {
       setStatus("Faltan fechas");
-      actualizarLinkGraficas();
       return;
     }
 
@@ -259,7 +236,6 @@
       const ab = $("alertsBox");
       if (sb) sb.style.display = "none";
       if (ab) ab.style.display = "none";
-      actualizarLinkGraficas();
       return;
     }
 
@@ -281,12 +257,10 @@
       if (hintEl) hintEl.textContent = "No se encontraron registros con esos filtros.";
       renderSummary(null, 0);
       renderAlertas(null);
-      actualizarLinkGraficas();
       return;
     }
 
     setStatus("OK");
-    actualizarLinkGraficas();
   }
 
   document.addEventListener("DOMContentLoaded", async () => {
@@ -302,17 +276,8 @@
     if (form) {
       form.addEventListener("submit", buscarConConsumoYAlertas);
 
-      ["inicio", "fin", "diseno", "zona", "turno", "wbs"].forEach((id) => {
-        const el = $(id);
-        if (!el) return;
-        el.addEventListener("change", actualizarLinkGraficas);
-        el.addEventListener("input", actualizarLinkGraficas);
-      });
 
-      actualizarLinkGraficas();
       form.dispatchEvent(new Event("submit"));
-    } else {
-      actualizarLinkGraficas();
     }
   });
 })();
