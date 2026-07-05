@@ -26,18 +26,18 @@ from utils.logging_seguridad import logger_seguridad
 # entradas absurdamente largas para no gastar CPU hasheando textos enormes.
 MAX_LARGO_PASSWORD = 128
 
-# Control de intentos fallidos de login.
-MAX_INTENTOS = 5            # intentos permitidos antes de bloquear
-BLOQUEO_SEGUNDOS = 15 * 60  # 15 minutos de bloqueo
+# control de intentos fallidos de login.
+MAX_INTENTOS = 5                  # intentos permitidos antes de bloquear
+# bloqueo minimo de 24 horas ante fuerza bruta. asi un atacante no puede
+# seguir probando claves el mismo dia tras pasarse del limite de intentos.
+BLOQUEO_SEGUNDOS = 24 * 60 * 60   # 24 horas de bloqueo
 
 # Roles válidos del sistema (debe coincidir con auth/roles.py).
 ROLES_VALIDOS = ("Admin", "Operador", "Visualizador")
 
-# Registro en memoria de intentos fallidos.
-# clave -> {"intentos": int, "bloqueado_hasta": float (timestamp)}
-# Es suficiente para un proyecto universitario de un solo proceso.
-# Si en el futuro se corre con varios workers, esto debería ir a la BD o Redis.
-_intentos_fallidos: dict[str, dict] = {}
+# los intentos fallidos se persisten en la tabla 'intentos_login' de la bd
+# (no en memoria) para q el bloqueo aguante reinicios del servidor. asi un
+# ataque de fuerza bruta no se reinicia cuando se reinicia el proceso flask.
 
 
 # ---------------------------------------------------------------------------
@@ -76,17 +76,27 @@ def _clave_intentos(username: str, ip: str) -> str:
 
 def esta_bloqueado(username: str, ip: str) -> tuple[bool, int]:
     """
-    Indica si la combinación usuario/IP está bloqueada.
+    indica si la combinacion usuario/ip esta bloqueada.
+
+    lee el estado desde la tabla 'intentos_login' (consulta parametrizada).
 
     Returns:
         (bloqueado, segundos_restantes)
     """
-    registro = _intentos_fallidos.get(_clave_intentos(username, ip))
-    if not registro:
+    clave = _clave_intentos(username, ip)
+    with conectar() as conexion:
+        cursor = conexion.cursor()
+        cursor.execute(
+            "SELECT bloqueado_hasta FROM intentos_login WHERE clave = ?",
+            (clave,),
+        )
+        fila = cursor.fetchone()
+
+    if not fila:
         return False, 0
 
-    bloqueado_hasta = registro.get("bloqueado_hasta", 0)
-    restante = int(bloqueado_hasta - time.time())
+    # restante = cuanto falta para q expire el bloqueo, en segundos.
+    restante = int(fila["bloqueado_hasta"] - time.time())
     if restante > 0:
         return True, restante
 
@@ -94,20 +104,47 @@ def esta_bloqueado(username: str, ip: str) -> tuple[bool, int]:
 
 
 def _registrar_fallo(username: str, ip: str) -> None:
-    """Suma un intento fallido y activa el bloqueo si se pasa del límite."""
+    """
+    suma un intento fallido en la bd y activa el bloqueo si se pasa del limite.
+
+    usa upsert parametrizado: si la clave ya existe suma 1 al contador, si no
+    crea la fila. cuando los intentos llegan a MAX_INTENTOS se fija
+    bloqueado_hasta = ahora + BLOQUEO_SEGUNDOS (24 horas).
+    """
     clave = _clave_intentos(username, ip)
-    registro = _intentos_fallidos.get(clave, {"intentos": 0, "bloqueado_hasta": 0})
-    registro["intentos"] += 1
+    bloqueo = time.time() + BLOQUEO_SEGUNDOS
 
-    if registro["intentos"] >= MAX_INTENTOS:
-        registro["bloqueado_hasta"] = time.time() + BLOQUEO_SEGUNDOS
-
-    _intentos_fallidos[clave] = registro
+    with conectar() as conexion:
+        cursor = conexion.cursor()
+        # primero insertamos o sumamos el intento.
+        cursor.execute(
+            """
+            INSERT INTO intentos_login (clave, intentos, bloqueado_hasta)
+            VALUES (?, 1, 0)
+            ON CONFLICT(clave) DO UPDATE SET
+                intentos = intentos + 1
+            """,
+            (clave,),
+        )
+        # si con este intento se alcanza el limite, activamos el bloqueo de 24h.
+        cursor.execute(
+            """
+            UPDATE intentos_login
+            SET bloqueado_hasta = ?
+            WHERE clave = ? AND intentos >= ?
+            """,
+            (bloqueo, clave, MAX_INTENTOS),
+        )
+        conexion.commit()
 
 
 def _limpiar_intentos(username: str, ip: str) -> None:
-    """Borra el historial de intentos tras un login exitoso."""
-    _intentos_fallidos.pop(_clave_intentos(username, ip), None)
+    """borra el registro de intentos de la bd tras un login exitoso."""
+    clave = _clave_intentos(username, ip)
+    with conectar() as conexion:
+        cursor = conexion.cursor()
+        cursor.execute("DELETE FROM intentos_login WHERE clave = ?", (clave,))
+        conexion.commit()
 
 
 # ---------------------------------------------------------------------------
