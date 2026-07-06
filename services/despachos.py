@@ -2,6 +2,14 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 from utils.db import conectar, columnas_tabla, float_seguro, valor_fila, RUTA_BD
 
+
+def _float_flexible(valor):
+    if valor is None or valor == "":
+        return None
+    if isinstance(valor, str):
+        valor = valor.strip().replace(",", ".")
+    return float(valor)
+
 def _receta_por_diseno(conexion, diseno: str):
     """
     Busca una receta por código de diseño.
@@ -73,12 +81,16 @@ def insertar_despacho(
         int | None: ID del despacho insertado o None si falló.
     """
     try:
-        volumen_m3 = float(volumen)
+        volumen_m3 = _float_flexible(volumen)
     except Exception:
         return None
 
-    if volumen_m3 <= 0 or not diseno_mezcla:
+    if volumen_m3 is None or volumen_m3 <= 0 or not diseno_mezcla:
         return None
+
+    humedad_arena = _float_flexible(humedad_arena)
+    asentamiento_final = _float_flexible(asentamiento_final)
+    temperatura = _float_flexible(temperatura)
 
     with conectar(ruta_bd) as conexion:
         receta = _receta_por_diseno(conexion, diseno_mezcla)

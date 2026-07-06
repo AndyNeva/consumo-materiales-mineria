@@ -8,6 +8,15 @@
     return el ? el.value : "";
   }
 
+  function numero(id, required = false){
+    const raw = val(id).trim();
+    if (!raw) return required ? null : null;
+    const parsed = Number(raw.replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  let csrfToken = "";
+
   function num(v) {
     if (v === null || v === undefined || v === "") return "";
     const n = Number(v);
@@ -78,16 +87,21 @@
 
   async function mostrarCruceConsumo() {
     // Toma los valores del formulario actual
+    const volumen = numero("volumen_m3", true);
+    if (volumen === null) {
+      alert("Ingresa un volumen válido antes de hacer el cruce.");
+      return;
+    }
     const payload = {
       fecha: val("fecha"),
-      volumen_m3: Number(val("volumen_m3")),
+      volumen_m3: volumen,
       diseno_mezcla: val("diseno_mezcla"),
       zona: val("zona"),
       wbs: val("wbs"),
       turno: val("turno"),
-      arena_humedad_pct: Number(val("arena_humedad_pct") || 0),
-      asentamiento_final_cm: Number(val("asentamiento_final_cm") || 0),
-      temperatura_c: Number(val("temperatura_c") || 0),
+      arena_humedad_pct: numero("arena_humedad_pct"),
+      asentamiento_final_cm: numero("asentamiento_final_cm"),
+      temperatura_c: numero("temperatura_c"),
     };
     // Validación básica
     if (!payload.fecha || !payload.diseno_mezcla) {
@@ -96,7 +110,10 @@
     }
     const res = await fetch("/api/cruce_consumo_registro", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
       body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
@@ -123,21 +140,30 @@
   async function guardarDespacho(e){
     e.preventDefault();
 
+    const volumen = numero("volumen_m3", true);
+    if (volumen === null) {
+      alert("Ingresa un volumen válido antes de guardar el registro.");
+      return;
+    }
+
     const payload = {
       fecha: val("fecha"),
-      volumen_m3: Number(val("volumen_m3")),
+      volumen_m3: volumen,
       diseno_mezcla: val("diseno_mezcla"),
       zona: val("zona"),
       wbs: val("wbs"),
       turno: val("turno"),
-      arena_humedad_pct: Number(val("arena_humedad_pct") || 0),
-      asentamiento_final_cm: Number(val("asentamiento_final_cm") || 0),
-      temperatura_c: Number(val("temperatura_c") || 0),
+      arena_humedad_pct: numero("arena_humedad_pct"),
+      asentamiento_final_cm: numero("asentamiento_final_cm"),
+      temperatura_c: numero("temperatura_c"),
     };
 
     const res = await fetch("/api/despachos", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
       body: JSON.stringify(payload),
     });
 
@@ -154,6 +180,7 @@
 
   document.addEventListener("DOMContentLoaded", async () => {
     try {
+      csrfToken = await obtenerCsrfToken();
       await cargarDisenos();
     } catch (err){
       console.error(err);

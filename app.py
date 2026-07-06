@@ -61,10 +61,17 @@ def verificar_inactividad():
 logging.basicConfig(level=logging.INFO)
 
 
+def _float_flexible(valor):
+    """Convierte números escritos con punto o coma decimal a float."""
+    if isinstance(valor, str):
+        valor = valor.strip().replace(",", ".")
+    return float(valor)
+
+
 def numero_no_negativo(valor, nombre_campo):
     """Convierte un valor a float y valida que no sea negativo."""
     try:
-        numero = float(valor)
+        numero = _float_flexible(valor)
     except (TypeError, ValueError):
         raise ValueError(f"{nombre_campo} debe ser un número válido")
     if numero < 0:
@@ -183,7 +190,7 @@ def api_despachos():
         if not str(datos.get("fecha", "")).strip():
             errores.append("Falta la fecha del despacho.")
         try:
-            if float(datos.get("volumen_m3", 0)) <= 0:
+            if _float_flexible(datos.get("volumen_m3", 0)) <= 0:
                 errores.append("El volumen_m3 debe ser mayor que 0.")
         except (TypeError, ValueError):
             errores.append("El volumen_m3 no es un número válido.")
@@ -379,7 +386,7 @@ def api_resumen_consumo():
 # ===== API ALERTAS CONSUMO =====
 
 @app.route("/api/alertas_consumo")
-@login_required
+@cualquier_usuario
 def api_alertas_consumo():
     """Cruza el consumo filtrado del historial contra el stock disponible."""
     inicio = request.args.get("inicio")
@@ -420,16 +427,24 @@ def api_cruce_consumo_registro():
             return jsonify({"ok": False, "error": "No se recibieron datos"}), 400
 
         diseno = datos.get("diseno_mezcla")
-        volumen = datos.get("volumen_m3")
+        volumen_raw = datos.get("volumen_m3")
 
-        if not diseno or not volumen:
+        if not diseno or volumen_raw in (None, ""):
             return jsonify({"ok": False, "error": "Faltan diseno_mezcla o volumen"}), 400
+
+        try:
+            volumen = _float_flexible(volumen_raw)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "El volumen_m3 no es un número válido"}), 400
+
+        if volumen <= 0:
+            return jsonify({"ok": False, "error": "El volumen_m3 debe ser mayor que 0"}), 400
 
         with conectar(RUTA_BD) as conexion:
             receta = _receta_por_diseno(conexion, diseno)
             if receta is None:
                 return jsonify({"ok": False, "error": "No existe receta para el diseño indicado"}), 400
-            consumos = _calcular_consumos_estimados(receta, float(volumen))
+            consumos = _calcular_consumos_estimados(receta, volumen)
 
         salida, no_mapeados, no_encontrados = cruzar_consumo_vs_stock(consumos, ruta_bd=RUTA_BD)
         return jsonify({"ok": True, "datos": salida, "no_mapeados": no_mapeados, "no_encontrados": no_encontrados})

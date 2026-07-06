@@ -228,6 +228,7 @@ tbody tr:nth-child(even){background:rgba(10,18,35,.6)}
 "use strict";
 
 let data = [];
+let csrfToken = "";
 
 const $ = (id) => document.getElementById(id);
 
@@ -238,8 +239,16 @@ function escapeHtml(value){
 }
 
 function numero(value){
-  const n = Number(value);
+  const raw = String(value ?? "").trim().replace(",", ".");
+  if(!raw) return 0;
+  const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
+}
+
+async function obtenerCsrfToken(){
+  const res = await fetch("/api/csrf-token");
+  const json = await res.json().catch(() => ({}));
+  return json.csrf_token || "";
 }
 
 function fmt(value){
@@ -302,6 +311,9 @@ function render(){
 
 async function guardarMaterialNuevo(event){
   event.preventDefault();
+  if(!csrfToken){
+    csrfToken = await obtenerCsrfToken();
+  }
   const payload = {
     nombre: $("nombre").value.trim(),
     unidad: $("unidad").value.trim(),
@@ -323,7 +335,10 @@ async function guardarMaterialNuevo(event){
     setStatus("formStatus", "Guardando material...");
     const res = await fetch("/api/materiales", {
       method:"POST",
-      headers:{"Content-Type":"application/json"},
+      headers:{
+        "Content-Type":"application/json",
+        "X-CSRFToken": csrfToken,
+      },
       body:JSON.stringify(payload)
     });
     const json = await res.json().catch(() => ({}));
@@ -360,10 +375,16 @@ async function editarMinMax(i){
   }
 
   try {
+    if(!csrfToken){
+      csrfToken = await obtenerCsrfToken();
+    }
     setStatus("tablaStatus", "Actualizando mínimos y máximos...");
     const res = await fetch("/api/materiales", {
       method:"POST",
-      headers:{"Content-Type":"application/json"},
+      headers:{
+        "Content-Type":"application/json",
+        "X-CSRFToken": csrfToken,
+      },
       body:JSON.stringify({
         id: material.id,
         stock_minimo: minNum,
@@ -407,7 +428,10 @@ function wireEvents(){
 }
 
 wireEvents();
-cargarMateriales();
+(async () => {
+  csrfToken = await obtenerCsrfToken();
+  await cargarMateriales();
+})();
 </script>
 </body>
 </html>
