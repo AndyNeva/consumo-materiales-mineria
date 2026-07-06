@@ -34,7 +34,8 @@ def crear_esquema():
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
-            rol TEXT
+            rol TEXT,
+            password_hash TEXT
         )
     ''')
 

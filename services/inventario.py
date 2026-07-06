@@ -3,6 +3,29 @@ from typing import Any, Dict, List, Optional, Tuple
 from utils.db import conectar, float_seguro, valor_fila, RUTA_BD
 
 
+def registrar_movimiento(
+    conexion,
+    usuario_id: Optional[int],
+    id_insumo: int,
+    cantidad: float,
+    tipo: str,          # "INGRESO" | "EGRESO" | "AJUSTE"
+    fecha: Optional[str] = None,
+    proveedor: Optional[str] = None,
+    detalle: Optional[str] = None,
+) -> None:
+    """
+    Registra un movimiento de inventario para trazabilidad/auditoría.
+    No hace commit (se asume que el caller maneja la transacción).
+    """
+    from datetime import date
+    conexion.execute(
+        """
+        INSERT INTO movimientos (usuario_id, id_insumo, cantidad, fecha, tipo, proveedor, detalle)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (usuario_id, id_insumo, cantidad, fecha or date.today().isoformat(), tipo, proveedor, detalle)
+    )
+
 def _material_por_nombre(conexion, nombre: str):
     """
     Busca un material por nombre de forma case-insensitive.
@@ -46,6 +69,7 @@ def actualizar_material(
     stock_actual: Optional[float] = None,
     stock_minimo: Optional[float] = None,
     stock_maximo: Optional[float] = None,
+    usuario_id: Optional[int] = None,
     ruta_bd: str = RUTA_BD,
 ) -> bool:
     """
@@ -78,6 +102,19 @@ def actualizar_material(
 
     if not actualizaciones:
         return False
+    
+    with conectar(ruta_bd) as conexion:
+        if stock_actual is not None:
+            anterior = conexion.execute(
+                "SELECT stock_actual FROM Insumos WHERE id_insumo = ?", (material_id,)
+            ).fetchone()
+            if anterior:
+                diferencia = stock_actual - float(anterior["stock_actual"] or 0)
+                if diferencia != 0:
+                    registrar_movimiento(
+                        conexion, usuario_id, material_id, abs(diferencia),
+                        tipo="AJUSTE", detalle=f"Ajuste manual de stock ({'+' if diferencia>0 else ''}{diferencia})"
+                    )
 
     parametros.append(material_id)
     sql = f"UPDATE Insumos SET {', '.join(actualizaciones)} WHERE id_insumo = ?"
@@ -94,10 +131,12 @@ def agregar_material(
     stock_actual: float,
     stock_minimo: float,
     stock_maximo: float,
+    usuario_id: Optional[int] = None,
     ruta_bd: str = RUTA_BD,
 ) -> Optional[int]:
     """
-    Inserta un nuevo material en el inventario.
+    Inserta un nuevo material en el inventario. Si el stock inicial es
+    mayor a 0, registra un movimiento tipo INGRESO.
 
     Args:
         nombre (str): Nombre del material.
@@ -105,6 +144,7 @@ def agregar_material(
         stock_actual (float): Cantidad disponible actualmente.
         stock_minimo (float): Umbral mínimo de alerta.
         stock_maximo (float): Capacidad máxima de almacenamiento.
+        usuario_id (int | None): Usuario que da de alta el material (auditoría).
         ruta_bd (str): Ruta a la base de datos.
 
     Returns:
@@ -123,8 +163,20 @@ def agregar_material(
             """,
             (nombre, unidad, float(stock_actual), float(stock_minimo), float(stock_maximo))
         )
+        nuevo_id = int(cursor.lastrowid)
+
+        if float(stock_actual) > 0:
+            registrar_movimiento(
+                conexion,
+                id_insumo=nuevo_id,
+                cantidad=float(stock_actual),
+                tipo="INGRESO",
+                usuario_id=usuario_id,
+                detalle=f"Alta de material '{nombre}' con stock inicial",
+            )
+
         conexion.commit()
-        return int(cursor.lastrowid)
+        return nuevo_id
 
 
 def eliminar_material(

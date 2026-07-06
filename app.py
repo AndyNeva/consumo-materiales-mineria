@@ -139,14 +139,18 @@ def api_dashboard():
         consumo = consumo_diario(ruta_bd=RUTA_BD)
         registros_semanal, cantidad_registros_semanal = registros_ultima_semana(ruta_bd=RUTA_BD)
 
-        with conectar() as conexion:
-            cursor = conexion.cursor()
-            cursor.execute("""
-                SELECT nombre AS material, unidad, stock_actual AS stock, stock_minimo AS minimo
-                FROM materiales
-                ORDER BY nombre
-            """)
-            inv = [dict(fila) for fila in cursor.fetchall()]
+        # Obtener inventario desde la capa de servicios y mapear
+        # a la estructura que espera el frontend (material, unidad, stock, minimo)
+        inv_raw = obtener_materiales(ruta_bd=RUTA_BD)
+        inv = [
+            {
+                "material": m.get("nombre") or m.get("nombre_insumo"),
+                "unidad": m.get("unidad"),
+                "stock": m.get("stock_actual") if m.get("stock_actual") is not None else m.get("stock", 0),
+                "minimo": m.get("stock_minimo") if m.get("stock_minimo") is not None else m.get("minimo", 0),
+            }
+            for m in (inv_raw or [])
+        ]
 
         respuesta = {
             "consumo_diario": consumo,
@@ -167,7 +171,8 @@ def api_recetas():
     try:
         with conectar() as conexion:
             cursor = conexion.cursor()
-            cursor.execute("SELECT diseno_mezcla AS codigo_diseno FROM Mezclas_Maestra ORDER BY diseno_mezcla")
+            # La tabla de diseños se llama `Disenos_Mezcla` en el esquema
+            cursor.execute("SELECT diseno_mezcla AS codigo_diseno FROM Disenos_Mezcla ORDER BY diseno_mezcla")
             filas = cursor.fetchall()
         disenos = [fila["codigo_diseno"] for fila in filas if fila["codigo_diseno"]]
         return jsonify({"ok": True, "disenos": disenos})
@@ -214,6 +219,7 @@ def api_despachos():
             asentamiento_final=datos.get("asentamiento_final_cm", 0),
             temperatura=datos.get("temperatura_c", 0),
             ruta_bd=RUTA_BD,
+            usuario_id=session.get("usuario_id"),
         )
         if not nuevo_id:
             return jsonify({"ok": False, "error": "No se pudo insertar el despacho."}), 400
@@ -310,6 +316,7 @@ def api_materiales():
                 stock_minimo=stock_minimo,
                 stock_maximo=stock_maximo,
                 ruta_bd=RUTA_BD,
+                usuario_id=session.get("usuario_id"),
             )
 
             if not nuevo_id:
@@ -338,6 +345,7 @@ def api_materiales():
             stock_minimo=stock_minimo,
             stock_maximo=stock_maximo,
             ruta_bd=RUTA_BD,
+            usuario_id=session.get("usuario_id"),
         )
         if not actualizado:
             return jsonify({"ok": False, "error": "Material no encontrado"}), 404

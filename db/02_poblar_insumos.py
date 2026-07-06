@@ -42,6 +42,43 @@ def poblar_insumos_y_base():
         VALUES (?, ?, ?, ?, ?)
     """, materiales)
     
+    # === Crear usuarios iniciales (integrado aquí, usando hashear_password de auth/login.py) ===
+    USUARIOS_INICIALES = [
+        ("admin", "admin123", "Admin"),
+        ("operador", "operador123", "Operador"),
+        ("visor", "visor123", "Visualizador"),
+    ]
+
+    # Importar la función de hashing desde auth.login para mantener consistencia
+    try:
+        from auth.login import hashear_password  # type: ignore
+    except Exception:
+        # Fallback: si por alguna razón no está disponible, usar identidad (no ideal)
+        hashear_password = lambda p: p
+
+    # Upsert de usuarios iniciales con hash de contraseña
+    for username, password, rol in USUARIOS_INICIALES:
+        try:
+            pw_hash = hashear_password(password)
+        except Exception:
+            pw_hash = password
+        try:
+            cur.execute(
+                """
+                INSERT INTO usuarios (username, rol, password_hash)
+                VALUES (?, ?, ?)
+                ON CONFLICT(username) DO UPDATE SET
+                    rol = excluded.rol,
+                    password_hash = excluded.password_hash
+                """,
+                (username, rol, pw_hash),
+            )
+        except Exception:
+            cur.execute(
+                "INSERT OR REPLACE INTO usuarios (username, rol, password_hash) VALUES (?, ?, ?)",
+                (username, rol, pw_hash),
+            )
+
     conn.commit()
     print(f"[OK] Insertados {len(materiales)} insumos base en catálogo.")
     

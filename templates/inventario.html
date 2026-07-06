@@ -238,6 +238,18 @@ function escapeHtml(value){
   }[c]));
 }
 
+// CAMBIO: ahora distingue entre vacío, inválido y negativo
+// Devuelve { ok, valor, error }
+function parsearNumeroPositivo(raw, nombreCampo){
+  const str = String(raw ?? "").trim().replace(",", ".");
+  if(!str) return { ok: false, error: `${nombreCampo} no puede estar vacío` };
+  const n = Number(str);
+  if(!Number.isFinite(n)) return { ok: false, error: `${nombreCampo} debe ser un número válido` };
+  if(n < 0) return { ok: false, error: `${nombreCampo} no puede ser negativo` };
+  return { ok: true, valor: n };
+}
+
+// Para mostrar en tabla — no necesita validar
 function numero(value){
   const raw = String(value ?? "").trim().replace(",", ".");
   if(!raw) return 0;
@@ -304,32 +316,48 @@ function render(){
         <td>${fmt(it.stock_minimo)}</td>
         <td>${fmt(it.stock_maximo)}</td>
         <td><span class="badge ${e.c}">${e.t}</span></td>
-        <td><button class="btn secondary" type="button" data-edit-index="${i}">Editar min / max</button></td>
+        <td style="display:flex;gap:8px;">
+          <button class="btn secondary" type="button" data-edit-index="${i}">Editar min / max</button>
+          <button class="btn secondary" type="button" data-stock-index="${i}">Editar stock</button>
+        </td>
       </tr>`);
   });
 }
 
 async function guardarMaterialNuevo(event){
   event.preventDefault();
-  if(!csrfToken){
-    csrfToken = await obtenerCsrfToken();
-  }
-  const payload = {
-    nombre: $("nombre").value.trim(),
-    unidad: $("unidad").value.trim(),
-    stock_actual: numero($("stock_actual").value),
-    stock_minimo: numero($("stock_minimo").value),
-    stock_maximo: numero($("stock_maximo").value)
-  };
+  if(!csrfToken) csrfToken = await obtenerCsrfToken();
 
-  if(!payload.nombre){
+  const nombre = $("nombre").value.trim();
+  if(!nombre){
     setStatus("formStatus", "Ingrese el nombre del material", "err-text");
     return;
   }
-  if(payload.stock_maximo && payload.stock_maximo < payload.stock_minimo){
+  if(/^\d+$/.test(nombre)){
+    setStatus("formStatus", "El nombre del material no puede ser solo números", "err-text");
+    return;
+  }
+
+  const stockRes  = parsearNumeroPositivo($("stock_actual").value, "Stock actual");
+  const minimoRes = parsearNumeroPositivo($("stock_minimo").value, "Mínimo");
+  const maximoRes = parsearNumeroPositivo($("stock_maximo").value, "Máximo");
+
+  if(!stockRes.ok)  { setStatus("formStatus", stockRes.error,  "err-text"); return; }
+  if(!minimoRes.ok) { setStatus("formStatus", minimoRes.error, "err-text"); return; }
+  if(!maximoRes.ok) { setStatus("formStatus", maximoRes.error, "err-text"); return; }
+
+  if(maximoRes.valor && maximoRes.valor < minimoRes.valor){
     setStatus("formStatus", "El máximo no puede ser menor que el mínimo", "err-text");
     return;
   }
+
+  const payload = {
+    nombre,
+    unidad: $("unidad").value.trim(),
+    stock_actual: stockRes.valor,
+    stock_minimo: minimoRes.valor,
+    stock_maximo: maximoRes.valor,
+  };
 
   try{
     setStatus("formStatus", "Guardando material...");
@@ -362,23 +390,27 @@ async function editarMinMax(i){
   const material = data[i];
   if(!material) return;
 
-  const min = prompt(`Nuevo mínimo para ${material.nombre}:`, material.stock_minimo);
-  if(min === null) return;
-  const max = prompt(`Nuevo máximo para ${material.nombre}:`, material.stock_maximo);
-  if(max === null) return;
+  const minRaw = prompt(`Nuevo mínimo para "${material.nombre}":`, material.stock_minimo);
+  if(minRaw === null) return;  // canceló
 
-  const minNum = numero(min);
-  const maxNum = numero(max);
-  if(maxNum && maxNum < minNum){
+  const maxRaw = prompt(`Nuevo máximo para "${material.nombre}":`, material.stock_maximo);
+  if(maxRaw === null) return;  // canceló
+
+  // CAMBIO 3: validar con parsearNumeroPositivo, mostrar error si inválido
+  const minRes = parsearNumeroPositivo(minRaw, "Mínimo");
+  const maxRes = parsearNumeroPositivo(maxRaw, "Máximo");
+
+  if(!minRes.ok){ setStatus("tablaStatus", minRes.error, "err-text"); return; }
+  if(!maxRes.ok){ setStatus("tablaStatus", maxRes.error, "err-text"); return; }
+
+  if(maxRes.valor && maxRes.valor < minRes.valor){
     setStatus("tablaStatus", "El máximo no puede ser menor que el mínimo", "err-text");
     return;
   }
 
   try {
-    if(!csrfToken){
-      csrfToken = await obtenerCsrfToken();
-    }
-    setStatus("tablaStatus", "Actualizando mínimos y máximos...");
+    if(!csrfToken) csrfToken = await obtenerCsrfToken();
+    setStatus("tablaStatus", "Actualizando...");
     const res = await fetch("/api/materiales", {
       method:"POST",
       headers:{
@@ -387,21 +419,60 @@ async function editarMinMax(i){
       },
       body:JSON.stringify({
         id: material.id,
-        stock_minimo: minNum,
-        stock_maximo: maxNum
+        stock_minimo: minRes.valor,
+        stock_maximo: maxRes.valor,
       })
     });
-
     const json = await res.json().catch(() => ({}));
     if(!res.ok || !json.ok){
       setStatus("tablaStatus", "Error al actualizar: " + (json.error || `HTTP ${res.status}`), "err-text");
       return;
     }
-    setStatus("tablaStatus", "Material actualizado correctamente", "ok-text");
+    setStatus("tablaStatus", "Mínimo y máximo actualizados correctamente", "ok-text");
     await cargarMateriales();
   } catch(err){
     console.error(err);
     setStatus("tablaStatus", "Error de red al actualizar", "err-text");
+  }
+}
+
+async function editarStock(i){
+  const material = data[i];
+  if(!material) return;
+
+  const stockRaw = prompt(`Nuevo stock actual para "${material.nombre}" (${material.unidad}):`, material.stock_actual);
+  if(stockRaw === null) return;  // canceló
+
+  const stockRes = parsearNumeroPositivo(stockRaw, "Stock actual");
+  if(!stockRes.ok){
+    setStatus("tablaStatus", stockRes.error, "err-text");
+    return;
+  }
+
+  try {
+    if(!csrfToken) csrfToken = await obtenerCsrfToken();
+    setStatus("tablaStatus", "Actualizando stock...");
+    const res = await fetch("/api/materiales", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      body:JSON.stringify({
+        id: material.id,
+        stock_actual: stockRes.valor,
+      })
+    });
+    const json = await res.json().catch(() => ({}));
+    if(!res.ok || !json.ok){
+      setStatus("tablaStatus", "Error al actualizar stock: " + (json.error || `HTTP ${res.status}`), "err-text");
+      return;
+    }
+    setStatus("tablaStatus", `Stock de "${material.nombre}" actualizado correctamente`, "ok-text");
+    await cargarMateriales();
+  } catch(err){
+    console.error(err);
+    setStatus("tablaStatus", "Error de red al actualizar stock", "err-text");
   }
 }
 
@@ -412,9 +483,15 @@ function wireEvents(){
   const tbody = $("tbody");
   if(tbody){
     tbody.addEventListener("click", (event) => {
-      const btn = event.target.closest("[data-edit-index]");
-      if(!btn) return;
-      editarMinMax(Number(btn.dataset.editIndex));
+      const btnEdit = event.target.closest("[data-edit-index]");
+      if(btnEdit){
+        editarMinMax(Number(btnEdit.dataset.editIndex));
+        return;
+      }
+      const btnStock = event.target.closest("[data-stock-index]");
+      if(btnStock){
+        editarStock(Number(btnStock.dataset.stockIndex));
+      }
     });
   }
 
