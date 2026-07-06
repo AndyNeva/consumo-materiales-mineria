@@ -15,7 +15,8 @@ def _material_por_nombre(conexion, nombre: str):
         sqlite3.Row | None: Fila del material o None si no existe.
     """
     cursor = conexion.execute(
-        "SELECT * FROM materiales WHERE LOWER(nombre)=LOWER(?) LIMIT 1",
+        "SELECT id_insumo AS id, nombre_insumo AS nombre, unidad, stock_actual, stock_minimo, stock_maximo "
+        "FROM Insumos WHERE LOWER(nombre_insumo)=LOWER(?) LIMIT 1",
         (nombre,)
     )
     return cursor.fetchone()
@@ -33,9 +34,9 @@ def obtener_materiales(ruta_bd: str = RUTA_BD) -> List[Dict[str, Any]]:
     """
     with conectar(ruta_bd) as conexion:
         cursor = conexion.execute("""
-            SELECT id, nombre, unidad, stock_actual, stock_minimo, stock_maximo
-            FROM materiales
-            ORDER BY nombre
+            SELECT id_insumo AS id, nombre_insumo AS nombre, unidad, stock_actual, stock_minimo, stock_maximo
+            FROM Insumos
+            ORDER BY nombre_insumo
         """)
         return [dict(fila) for fila in cursor.fetchall()]
 
@@ -79,7 +80,7 @@ def actualizar_material(
         return False
 
     parametros.append(material_id)
-    sql = f"UPDATE materiales SET {', '.join(actualizaciones)} WHERE id = ?"
+    sql = f"UPDATE Insumos SET {', '.join(actualizaciones)} WHERE id_insumo = ?"
 
     with conectar(ruta_bd) as conexion:
         cursor = conexion.execute(sql, parametros)
@@ -117,7 +118,7 @@ def agregar_material(
     with conectar(ruta_bd) as conexion:
         cursor = conexion.execute(
             """
-            INSERT INTO materiales (nombre, unidad, stock_actual, stock_minimo, stock_maximo)
+            INSERT INTO Insumos (nombre_insumo, unidad, stock_actual, stock_minimo, stock_maximo)
             VALUES (?, ?, ?, ?, ?)
             """,
             (nombre, unidad, float(stock_actual), float(stock_minimo), float(stock_maximo))
@@ -143,7 +144,7 @@ def eliminar_material(
     with conectar(ruta_bd) as conexion:
         # Verificar que el material existe
         cursor = conexion.execute(
-            "SELECT nombre FROM materiales WHERE id = ? LIMIT 1",
+            "SELECT nombre_insumo FROM Insumos WHERE id_insumo = ? LIMIT 1",
             (material_id,)
         )
         material = cursor.fetchone()
@@ -151,7 +152,7 @@ def eliminar_material(
             return False, "Material no encontrado"
 
         conexion.execute(
-            "DELETE FROM materiales WHERE id = ?",
+            "DELETE FROM Insumos WHERE id_insumo = ?",
             (material_id,)
         )
         conexion.commit()
