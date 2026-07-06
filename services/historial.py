@@ -27,7 +27,7 @@ def obtener_historial_consumo(
             condiciones.append("z.nombre_zona LIKE ?")
             parametros.append(f"%{zona}%")
         if turno:
-            condiciones.append("pd.turno = ?")
+            condiciones.append("t.nombre_turno = ?")
             parametros.append(turno)
         if wbs:
             condiciones.append("cc.codigo_cc LIKE ?")
@@ -39,7 +39,7 @@ def obtener_historial_consumo(
                 pd.fecha,
                 m.diseno_mezcla,
                 z.nombre_zona AS zona,
-                pd.turno,
+                t.nombre_turno AS turno,
                 cc.codigo_cc AS wbs,
                 pd.volumen_m3,
                 pd.arena_humedad_pct,
@@ -49,6 +49,7 @@ def obtener_historial_consumo(
             LEFT JOIN Disenos_Mezcla m ON pd.diseno_mezcla = m.diseno_mezcla
             LEFT JOIN Zonas z ON pd.id_zona = z.id_zona
             LEFT JOIN Centros_Costo cc ON pd.id_cc = cc.id_cc
+            LEFT JOIN Turnos t ON pd.id_turno = t.id_turno
             WHERE {" AND ".join(condiciones)}
             ORDER BY pd.fecha ASC, pd.id_produccion ASC
         """

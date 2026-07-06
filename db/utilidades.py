@@ -3,13 +3,13 @@ import pandas as pd
 
 def limpiar_numero(valor):
     """Convierte valores del Excel a float, manejando casos especiales"""
-    # Si ya es número, lo devuelve como float
-    if isinstance(valor, (int, float)):
-        return float(valor)
-
     # Si es NaN
     if pd.isna(valor):
         return 0.0
+
+    # Si ya es número, lo devuelve como float
+    if isinstance(valor, (int, float)):
+        return float(valor)
 
     # Limpieza básica de strings
     val_str = str(valor).strip()

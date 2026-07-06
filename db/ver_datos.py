@@ -36,6 +36,6 @@ else:
     ver_tabla("Insumos")
     ver_tabla("Zonas")
     ver_tabla("Centros_Costo")
-    ver_tabla("daily_demand")   
+    ver_tabla("Turnos")   
 
     conexion.close()

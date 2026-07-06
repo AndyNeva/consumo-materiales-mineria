@@ -379,7 +379,7 @@ def api_resumen_consumo():
 # ===== API ALERTAS CONSUMO =====
 
 @app.route("/api/alertas_consumo")
-@login_required
+@cualquier_usuario
 def api_alertas_consumo():
     """Cruza el consumo filtrado del historial contra el stock disponible."""
     inicio = request.args.get("inicio")

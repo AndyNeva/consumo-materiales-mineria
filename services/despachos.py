@@ -81,7 +81,7 @@ def _calcular_consumos_estimados(receta, volumen_m3: float) -> Dict[str, float]:
 def obtener_o_crear_zona(cursor, nombre_zona):
     nombre = str(nombre_zona).strip()
     if not nombre or nombre in ['nan', '-', '', 'None']:
-        return None
+        nombre = 'DESCONOCIDO'
     cursor.execute("SELECT id_zona FROM Zonas WHERE nombre_zona = ?", (nombre,))
     fila = cursor.fetchone()
     if fila:
@@ -92,7 +92,7 @@ def obtener_o_crear_zona(cursor, nombre_zona):
 def obtener_o_crear_cc(cursor, codigo_cc):
     codigo = str(codigo_cc).strip()
     if not codigo or codigo in ['nan', '-', '', 'None']:
-        return None
+        codigo = 'DESCONOCIDO'
     cursor.execute("SELECT id_cc FROM Centros_Costo WHERE codigo_cc = ?", (codigo,))
     fila = cursor.fetchone()
     if fila:
@@ -145,10 +145,17 @@ def insertar_despacho(
         id_zona = obtener_o_crear_zona(cursor, destino)
         id_cc = obtener_o_crear_cc(cursor, wbs)
 
+        # Mapear turno a id_turno: Diurno -> 1, Nocturno -> 2
+        turno_str = str(turno).strip().lower()
+        if "nocturno" in turno_str or "noche" in turno_str:
+            id_turno = 2
+        else:
+            id_turno = 1
+
         cursor.execute("""
             INSERT INTO Produccion_Diaria (
                 fecha, lote_numero, volumen_m3, diseno_mezcla, id_zona, id_cc,
-                arena_humedad_pct, asentamiento_final_cm, temperatura_c, turno
+                arena_humedad_pct, asentamiento_final_cm, temperatura_c, id_turno
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             fecha,
@@ -158,9 +165,9 @@ def insertar_despacho(
             id_zona,
             id_cc,
             humedad_arena,
-            asentamiento_final,
-            temperatura,
-            turno
+            asentamiento_final if asentamiento_final is not None else 0.0,
+            temperatura if temperatura is not None else 0.0,
+            id_turno
         ))
         id_produccion = int(cursor.lastrowid)
 

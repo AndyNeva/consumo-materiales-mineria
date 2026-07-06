@@ -11,7 +11,7 @@ EXCEL_PATH = os.path.join(BASE_DIR, "data", "raw", "Batch_Plant_Production_2025.
 def obtener_o_crear_zona(cursor, nombre_zona):
     nombre = str(nombre_zona).strip()
     if not nombre or nombre in ['nan', '-', '', 'None']:
-        return None
+        nombre = 'DESCONOCIDO'
     cursor.execute("SELECT id_zona FROM Zonas WHERE nombre_zona = ?", (nombre,))
     fila = cursor.fetchone()
     if fila:
@@ -22,7 +22,7 @@ def obtener_o_crear_zona(cursor, nombre_zona):
 def obtener_o_crear_cc(cursor, codigo_cc):
     codigo = str(codigo_cc).strip()
     if not codigo or codigo in ['nan', '-', '', 'None']:
-        return None
+        codigo = 'DESCONOCIDO'
     cursor.execute("SELECT id_cc FROM Centros_Costo WHERE codigo_cc = ?", (codigo,))
     fila = cursor.fetchone()
     if fila:
@@ -75,6 +75,36 @@ def cargar_datos():
         "Sika PP 48 (kg)-BARCHIP": "Fibras",
     }
 
+    # ========== RECETAS ==========
+    print("\n Leyendo hoja 'Base de Datos ' (Recetas)...")
+    df_mst = pd.read_excel(EXCEL_PATH, sheet_name="Base de Datos ", header=1, engine='openpyxl')
+    df_mst.columns = df_mst.columns.astype(str).str.strip()
+
+    col_diseno = next((c for c in df_mst.columns if "DISEÑO" in c.upper()), None)
+
+    total_rec = len(df_mst)
+    print(f" [OK] Leídas {total_rec} filas de recetas. Cargando en Base de Datos...")
+
+    recetas_validas = set()
+    if col_diseno:
+        for _, fila in df_mst.iterrows():
+            cod = str(fila[col_diseno]).strip()
+            if cod in ['', 'nan', '-']:
+                continue
+
+            diseno_mezcla = obtener_o_crear_mezcla(cursor, cod)
+            recetas_validas.add(cod.lower())
+
+            for col_excel, nombre_insumo in columnas_insumos_receta.items():
+                cant = limpiar_numero(fila.get(col_excel))
+                if cant > 0:
+                    id_insumo = mapa_insumos.get(nombre_insumo.lower())
+                    if id_insumo:
+                        cursor.execute("""
+                            INSERT OR REPLACE INTO Receta_Detalle (diseno_mezcla, id_insumo, cantidad_requerida)
+                            VALUES (?, ?, ?)
+                        """, (diseno_mezcla, id_insumo, cant))
+
     # ========== DESPACHOS (PRODUCCIÓN DIARIA) ==========
     print(" Leyendo hoja 'Ingreso_Diario' del Excel (puede demorar de 15 a 30 segundos)...")
     df_desp = pd.read_excel(EXCEL_PATH, sheet_name="Ingreso_Diario", header=0, engine='openpyxl')
@@ -92,6 +122,13 @@ def cargar_datos():
             continue
 
         diseno = str(fila.get('Diseño de la Mezcla','')).strip()
+        if not diseno or diseno in ['nan', '-', '', 'None']:
+            continue
+        
+        # Filtrar diseños que no tengan receta cargada
+        if diseno.lower() not in recetas_validas:
+            continue
+
         zona = str(fila.get('Zona','')).strip()
         wbs = str(fila.get('WBS','')).strip()
 
@@ -100,11 +137,22 @@ def cargar_datos():
         id_cc = obtener_o_crear_cc(cursor, wbs)
 
         volumen = limpiar_numero(fila.get('Volumen (m3)'))
+        if volumen <= 0:
+            continue
+
+        # Mapear turno a id_turno: DIA -> 1 (Diurno), NOCHE/NOCHE  -> 2 (Nocturno)
+        turno_val = str(fila.get('Turno', fila.get('TURNO', ''))).strip().upper()
+        if "DIA" in turno_val or "DIURNO" in turno_val:
+            id_turno = 1
+        elif "NOCHE" in turno_val or "NOCTURNO" in turno_val:
+            id_turno = 2
+        else:
+            id_turno = 1
 
         cursor.execute("""
             INSERT INTO Produccion_Diaria (
                 fecha, lote_numero, volumen_m3, diseno_mezcla, id_zona, id_cc,
-                arena_humedad_pct, asentamiento_final_cm, temperatura_c, turno
+                arena_humedad_pct, asentamiento_final_cm, temperatura_c, id_turno
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             fecha,
@@ -116,7 +164,7 @@ def cargar_datos():
             limpiar_numero(fila.get('ARENA HUMEDAD (%)')),
             limpiar_numero(fila.get('Asentamiento Final (cm)')),
             limpiar_numero(fila.get('Temp. (º C)')),
-            str(fila.get('Turno', fila.get('TURNO', '')))
+            id_turno
         ))
         id_produccion = cursor.lastrowid
 
@@ -153,17 +201,6 @@ def cargar_datos():
         if pd.isna(fila.iloc[0]) or fecha in ['NaT', 'nan', '']:
             continue
 
-        prov = "Desconocido"
-        try:
-            if str(fila.iloc[10]).strip() not in ['-', 'nan', '']:
-                prov = "Armijos"
-            elif str(fila.iloc[11]).strip() not in ['-', 'nan', '']:
-                prov = "Crusermine"
-            elif str(fila.iloc[12]).strip() not in ['-', 'nan', '']:
-                prov = "Quiringue"
-        except:
-            pass
-
         movs = [
             (1, id_arena, 'INGRESO'), (2, id_grava, 'INGRESO'), (3, id_cemento, 'INGRESO'),
             (4, id_arena, 'EGRESO'),  (5, id_grava, 'EGRESO'),  (6, id_cemento, 'EGRESO')
@@ -175,39 +212,11 @@ def cargar_datos():
             cant = limpiar_numero(fila.iloc[col])
             if cant > 0:
                 cursor.execute(
-                    "INSERT INTO movimientos (usuario_id, id_insumo, cantidad, fecha, tipo, proveedor) VALUES (?,?,?,?,?,?)",
-                    (1, id_insumo, cant, fecha, tipo, prov)
+                    "INSERT INTO movimientos (usuario_id, id_insumo, cantidad, fecha, tipo) VALUES (?,?,?,?,?)",
+                    (1, id_insumo, cant, fecha, tipo)
                 )
 
     print(f" [OK] Inventario cargado ({total_inv} registros procesados).")
-
-    # ========== RECETAS ==========
-    print("\n Leyendo hoja 'Base de Datos ' (Recetas)...")
-    df_mst = pd.read_excel(EXCEL_PATH, sheet_name="Base de Datos ", header=1, engine='openpyxl')
-    df_mst.columns = df_mst.columns.astype(str).str.strip()
-
-    col_diseno = next((c for c in df_mst.columns if "DISEÑO" in c.upper()), None)
-
-    total_rec = len(df_mst)
-    print(f" [OK] Leídas {total_rec} filas de recetas. Cargando en Base de Datos...")
-
-    if col_diseno:
-        for _, fila in df_mst.iterrows():
-            cod = str(fila[col_diseno]).strip()
-            if cod in ['', 'nan', '-']:
-                continue
-
-            diseno_mezcla = obtener_o_crear_mezcla(cursor, cod)
-
-            for col_excel, nombre_insumo in columnas_insumos_receta.items():
-                cant = limpiar_numero(fila.get(col_excel))
-                if cant > 0:
-                    id_insumo = mapa_insumos.get(nombre_insumo.lower())
-                    if id_insumo:
-                        cursor.execute("""
-                            INSERT OR REPLACE INTO Receta_Detalle (diseno_mezcla, id_insumo, cantidad_requerida)
-                            VALUES (?, ?, ?)
-                        """, (diseno_mezcla, id_insumo, cant))
 
     conexion.commit()
     conexion.close()

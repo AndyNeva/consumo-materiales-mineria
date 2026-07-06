@@ -59,8 +59,6 @@ def crear_esquema():
             cantidad REAL,
             fecha TEXT,
             tipo TEXT,
-            proveedor TEXT,
-            detalle TEXT,
             FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
             FOREIGN KEY (id_insumo) REFERENCES Insumos(id_insumo)
         )
@@ -81,6 +79,16 @@ def crear_esquema():
             codigo_cc TEXT UNIQUE NOT NULL
         )
     ''')
+
+    # Tabla de Turnos (Catálogo)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Turnos (
+            id_turno INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre_turno TEXT UNIQUE NOT NULL
+        )
+    ''')
+    cursor.execute("INSERT OR IGNORE INTO Turnos (id_turno, nombre_turno) VALUES (1, 'Diurno')")
+    cursor.execute("INSERT OR IGNORE INTO Turnos (id_turno, nombre_turno) VALUES (2, 'Nocturno')")
 
     # Tabla de Diseños de Mezcla (Recetas cabecera)
     cursor.execute('''
@@ -108,17 +116,18 @@ def crear_esquema():
             id_produccion INTEGER PRIMARY KEY AUTOINCREMENT,
             fecha TEXT NOT NULL,
             lote_numero TEXT,
-            volumen_m3 REAL,
-            diseno_mezcla TEXT,
-            id_zona INTEGER,
-            id_cc INTEGER,
+            volumen_m3 REAL NOT NULL,
+            diseno_mezcla TEXT NOT NULL,
+            id_zona INTEGER NOT NULL,
+            id_cc INTEGER NOT NULL,
             arena_humedad_pct REAL,
-            asentamiento_final_cm REAL,
-            temperatura_c REAL,
-            turno TEXT,
+            asentamiento_final_cm REAL NOT NULL,
+            temperatura_c REAL NOT NULL,
+            id_turno INTEGER NOT NULL,
             FOREIGN KEY (diseno_mezcla) REFERENCES Disenos_Mezcla(diseno_mezcla),
             FOREIGN KEY (id_zona) REFERENCES Zonas(id_zona),
-            FOREIGN KEY (id_cc) REFERENCES Centros_Costo(id_cc)
+            FOREIGN KEY (id_cc) REFERENCES Centros_Costo(id_cc),
+            FOREIGN KEY (id_turno) REFERENCES Turnos(id_turno)
         )
     ''')
 
@@ -131,14 +140,6 @@ def crear_esquema():
             PRIMARY KEY (id_produccion, id_insumo),
             FOREIGN KEY (id_produccion) REFERENCES Produccion_Diaria(id_produccion) ON DELETE CASCADE,
             FOREIGN KEY (id_insumo) REFERENCES Insumos(id_insumo)
-        )
-    ''')
-
-    # Tabla de demanda diaria
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS daily_demand (
-            date TEXT PRIMARY KEY,
-            volume_m3 REAL NOT NULL
         )
     ''')
 
