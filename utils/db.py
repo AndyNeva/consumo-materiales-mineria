@@ -13,6 +13,7 @@ _TABLAS_PERMITIDAS = frozenset({
     "recetas", "movimientos", "centros_costos", "zonas",
     "Produccion_Diaria", "Produccion_Insumos", "Insumos",
     "Disenos_Mezcla", "Receta_Detalle", "Zonas", "Centros_Costo"
+    "intentos_login"
 })
 
 def conectar(ruta_bd: str = RUTA_BD) -> sqlite3.Connection:
