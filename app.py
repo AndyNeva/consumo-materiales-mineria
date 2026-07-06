@@ -167,7 +167,7 @@ def api_recetas():
     try:
         with conectar() as conexion:
             cursor = conexion.cursor()
-            cursor.execute("SELECT codigo_diseno FROM recetas ORDER BY codigo_diseno")
+            cursor.execute("SELECT diseno_mezcla AS codigo_diseno FROM Mezclas_Maestra ORDER BY diseno_mezcla")
             filas = cursor.fetchall()
         disenos = [fila["codigo_diseno"] for fila in filas if fila["codigo_diseno"]]
         return jsonify({"ok": True, "disenos": disenos})

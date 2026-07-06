@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional
-from utils.db import conectar, columnas_tabla, float_seguro, valor_fila, RUTA_BD
+from utils.db import conectar, float_seguro, valor_fila, RUTA_BD
 
 
 def _float_flexible(valor):
@@ -11,31 +11,68 @@ def _float_flexible(valor):
     return float(valor)
 
 def _receta_por_diseno(conexion, diseno: str):
+def _receta_por_diseno(conexion, diseno: str) -> Optional[Dict[str, Any]]:
     """
-    Busca una receta por código de diseño.
-
-    Args:
-        conexion: Conexión activa a la BD.
-        diseno (str): Código del diseño de mezcla.
-
-    Returns:
-        sqlite3.Row | None: Fila de la receta o None si no existe.
+    Busca una receta por código de diseño y la retorna en el formato plano legacy
+    para mantener compatibilidad.
     """
     cursor = conexion.execute(
-        "SELECT * FROM recetas WHERE codigo_diseno = ? LIMIT 1", (diseno,)
+        "SELECT diseno_mezcla FROM Disenos_Mezcla WHERE diseno_mezcla = ? LIMIT 1",
+        (diseno,)
     )
-    return cursor.fetchone()
+    mezcla = cursor.fetchone()
+    if not mezcla:
+        return None
+
+    diseno_mezcla = mezcla["diseno_mezcla"]
+    cursor_ing = conexion.execute("""
+        SELECT rd.cantidad_requerida, i.nombre_insumo
+        FROM Receta_Detalle rd
+        JOIN Insumos i ON rd.id_insumo = i.id_insumo
+        WHERE rd.diseno_mezcla = ?
+    """, (diseno_mezcla,))
+    
+    ingredientes = cursor_ing.fetchall()
+    
+    mapeo_insumo_a_columna = {
+        "cemento": "cemento_kg",
+        "arena": "arena_kg",
+        "grava": "grava_kg",
+        "agua": "agua_kg",
+        "rheo 1000": "aditivo_a",
+        "basf 719": "aditivo_b",
+        "delvo": "aditivo_delvo",
+        "glenium 7950": "aditivo_glenium_7950",
+        "glenium 7970": "aditivo_glenium_7970",
+        "fibras": "aditivo_fibras",
+    }
+    
+    receta_plana = {
+        "id": diseno_mezcla,
+        "codigo_diseno": diseno_mezcla,
+        "cemento_kg": 0.0,
+        "arena_kg": 0.0,
+        "grava_kg": 0.0,
+        "agua_kg": 0.0,
+        "aditivo_a": 0.0,
+        "aditivo_b": 0.0,
+        "aditivo_delvo": 0.0,
+        "aditivo_glenium_7950": 0.0,
+        "aditivo_glenium_7970": 0.0,
+        "aditivo_fibras": 0.0
+    }
+    
+    for ing in ingredientes:
+        nombre = str(ing["nombre_insumo"]).lower()
+        col = mapeo_insumo_a_columna.get(nombre)
+        if col:
+            receta_plana[col] = float(ing["cantidad_requerida"] or 0)
+            
+    return receta_plana
 
 def _calcular_consumos_estimados(receta, volumen_m3: float) -> Dict[str, float]:
     """
     Calcula consumos de materiales según receta y volumen.
-
-    Args:
-        receta: Fila de la tabla recetas.
-        volumen_m3 (float): Volumen producido en metros cúbicos.
-
-    Returns:
-        Dict[str, float]: Consumo estimado por material.
     """
     return {
         "arena_kg":            float_seguro(valor_fila(receta, "arena_kg", 0.0)) * volumen_m3,
@@ -50,6 +87,35 @@ def _calcular_consumos_estimados(receta, volumen_m3: float) -> Dict[str, float]:
         "aditivo_fibras":       float_seguro(valor_fila(receta, "aditivo_fibras", 0.0)) * volumen_m3,
     }
 
+def obtener_o_crear_zona(cursor, nombre_zona):
+    nombre = str(nombre_zona).strip()
+    if not nombre or nombre in ['nan', '-', '', 'None']:
+        return None
+    cursor.execute("SELECT id_zona FROM Zonas WHERE nombre_zona = ?", (nombre,))
+    fila = cursor.fetchone()
+    if fila:
+        return fila[0]
+    cursor.execute("INSERT INTO Zonas (nombre_zona) VALUES (?)", (nombre,))
+    return cursor.lastrowid
+
+def obtener_o_crear_cc(cursor, codigo_cc):
+    codigo = str(codigo_cc).strip()
+    if not codigo or codigo in ['nan', '-', '', 'None']:
+        return None
+    cursor.execute("SELECT id_cc FROM Centros_Costo WHERE codigo_cc = ?", (codigo,))
+    fila = cursor.fetchone()
+    if fila:
+        return fila[0]
+    cursor.execute("INSERT INTO Centros_Costo (codigo_cc) VALUES (?)", (codigo,))
+    return cursor.lastrowid
+
+def obtener_o_crear_mezcla(cursor, diseno_mezcla):
+    diseno = str(diseno_mezcla).strip()
+    if not diseno or diseno in ['nan', '-', '', 'None']:
+        return None
+    cursor.execute("INSERT OR IGNORE INTO Disenos_Mezcla (diseno_mezcla) VALUES (?)", (diseno,))
+    return diseno
+
 def insertar_despacho(
     fecha: str,
     volumen: float,
@@ -63,22 +129,7 @@ def insertar_despacho(
     ruta_bd: str = RUTA_BD,
 ) -> Optional[int]:
     """
-    Inserta un nuevo despacho y descuenta stock de materiales.
-
-    Args:
-        fecha (str): Fecha del despacho en formato YYYY-MM-DD.
-        volumen (float): Volumen producido en m3.
-        diseno_mezcla (str): Código del diseño de mezcla.
-        wbs (str): Código WBS del proyecto.
-        destino (str): Zona o destino de la producción.
-        turno (str): Turno de trabajo.
-        humedad_arena (float): Porcentaje de humedad de la arena.
-        asentamiento_final (float): Asentamiento final en cm.
-        temperatura (float): Temperatura de la mezcla en grados C.
-        ruta_bd (str): Ruta a la base de datos.
-
-    Returns:
-        int | None: ID del despacho insertado o None si falló.
+    Inserta un nuevo despacho (Produccion_Diaria) y descuenta stock de Insumos.
     """
     try:
         volumen_m3 = _float_flexible(volumen)
@@ -93,37 +144,41 @@ def insertar_despacho(
     temperatura = _float_flexible(temperatura)
 
     with conectar(ruta_bd) as conexion:
+        # Habilitar soporte de llaves foráneas
+        conexion.execute("PRAGMA foreign_keys = ON;")
+        cursor = conexion.cursor()
+
         receta = _receta_por_diseno(conexion, diseno_mezcla)
         if receta is None:
             return None
 
         estimados = _calcular_consumos_estimados(receta, volumen_m3)
 
-        datos: Dict[str, Any] = {
-            "fecha": fecha,
-            "volumen_m3": volumen_m3,
-            "diseno_mezcla": diseno_mezcla,
-            "zona": destino,
-            "wbs": wbs,
-            "turno": turno,
-            "arena_humedad_pct": humedad_arena,
-            "asentamiento_final_cm": asentamiento_final,
-            "temperatura_c": temperatura,
-            **estimados,
-        }
+        diseno_mezcla_pk = obtener_o_crear_mezcla(cursor, diseno_mezcla)
+        id_zona = obtener_o_crear_zona(cursor, destino)
+        id_cc = obtener_o_crear_cc(cursor, wbs)
 
-        columnas = columnas_tabla(conexion, "despachos")
-        datos = {k: v for k, v in datos.items() if k in columnas}
+        cursor.execute("""
+            INSERT INTO Produccion_Diaria (
+                fecha, lote_numero, volumen_m3, diseno_mezcla, id_zona, id_cc,
+                arena_humedad_pct, asentamiento_final_cm, temperatura_c, turno
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            fecha,
+            "", # lote_numero vacío al registrar por app
+            volumen_m3,
+            diseno_mezcla_pk,
+            id_zona,
+            id_cc,
+            humedad_arena,
+            asentamiento_final,
+            temperatura,
+            turno
+        ))
+        id_produccion = int(cursor.lastrowid)
 
-        marcadores = ", ".join(["?"] * len(datos))
-        columnas_sql = ", ".join(datos.keys())
-        sql = f"INSERT INTO despachos ({columnas_sql}) VALUES ({marcadores})"
-
-        cursor = conexion.execute(sql, tuple(datos.values()))
-        conexion.commit()
-        id_insertado = int(cursor.lastrowid)
-
-        mapeo_consumo_material = {
+        # Mapear de campos estimados a nombres de insumos en BD
+        mapeo_consumo_insumo = {
             "arena_kg": "Arena",
             "grava_kg": "Grava",
             "cemento_kg": "Cemento",
@@ -136,21 +191,37 @@ def insertar_despacho(
             "aditivo_fibras": "Fibras",
         }
 
-        for campo, nombre_material in mapeo_consumo_material.items():
+        # Obtener mapa de nombres a ids de insumos
+        cursor.execute("SELECT id_insumo, nombre_insumo FROM Insumos")
+        mapa_insumos = {fila["nombre_insumo"].lower(): fila["id_insumo"] for fila in cursor.fetchall()}
+
+        for campo, nombre_insumo in mapeo_consumo_insumo.items():
             cantidad = estimados.get(campo, 0.0)
-            if cantidad == 0:
+            if cantidad <= 0:
                 continue
-            cursor2 = conexion.execute(
-                "SELECT stock_actual FROM materiales WHERE LOWER(nombre)=LOWER(?) LIMIT 1",
-                (nombre_material,)
+
+            id_insumo = mapa_insumos.get(nombre_insumo.lower())
+            if not id_insumo:
+                continue
+
+            # Insertar en Produccion_Insumos
+            cursor.execute("""
+                INSERT INTO Produccion_Insumos (id_produccion, id_insumo, cantidad_real)
+                VALUES (?, ?, ?)
+            """, (id_produccion, id_insumo, cantidad))
+
+            # Descontar stock_actual en Insumos
+            cursor.execute(
+                "SELECT stock_actual FROM Insumos WHERE id_insumo = ? LIMIT 1",
+                (id_insumo,)
             )
-            fila = cursor2.fetchone()
+            fila = cursor.fetchone()
             if fila is not None:
                 nuevo_stock = float(fila["stock_actual"] or 0) - cantidad
-                conexion.execute(
-                    "UPDATE materiales SET stock_actual = ? WHERE LOWER(nombre)=LOWER(?)",
-                    (nuevo_stock, nombre_material)
+                cursor.execute(
+                    "UPDATE Insumos SET stock_actual = ? WHERE id_insumo = ?",
+                    (nuevo_stock, id_insumo)
                 )
 
         conexion.commit()
-        return id_insertado
+        return id_produccion

@@ -11,6 +11,8 @@ RUTA_BD = os.getenv("DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.p
 _TABLAS_PERMITIDAS = frozenset({
     "despachos", "materiales", "usuarios",
     "recetas", "movimientos", "centros_costos", "zonas",
+    "Produccion_Diaria", "Produccion_Insumos", "Insumos",
+    "Disenos_Mezcla", "Receta_Detalle", "Zonas", "Centros_Costo"
     "intentos_login"
 })
 
