@@ -10,7 +10,6 @@ def _float_flexible(valor):
         valor = valor.strip().replace(",", ".")
     return float(valor)
 
-def _receta_por_diseno(conexion, diseno: str):
 def _receta_por_diseno(conexion, diseno: str) -> Optional[Dict[str, Any]]:
     """
     Busca una receta por código de diseño y la retorna en el formato plano legacy
