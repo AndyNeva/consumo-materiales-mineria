@@ -82,7 +82,6 @@
       color: var(--muted);
       font-weight:500;
     }
-
     .nav{
       display:flex;
       flex-direction:column;
@@ -162,7 +161,6 @@
       background: rgba(239,68,68,.10);
       border-color: rgba(239,68,68,.25);
     }
-
     .main{
       padding:26px 26px 40px 26px;
     }
@@ -210,7 +208,6 @@
       background: rgba(255,255,255,.05);
       border-color: rgba(255,255,255,.12);
     }
-
     .page{padding: 18px;}
     .row{display:flex; gap:12px; flex-wrap:wrap;}
     .field{display:flex; flex-direction:column; gap:6px; min-width:220px; flex:1;}
@@ -231,7 +228,6 @@
       box-shadow: 0 0 0 4px rgba(79,140,255,.18);
       background: rgba(255,255,255,.06);
     }
-
     .card{
       border-radius: var(--radius2);
       background: linear-gradient(180deg, rgba(16,31,55,.92), rgba(12,22,40,.92));
@@ -248,7 +244,6 @@
       background: radial-gradient(800px 220px at 20% 0%, rgba(79,140,255,.12), transparent 60%);
       pointer-events:none;
     }
-
     .table-wrap{
       overflow:auto;
       border:1px solid var(--border);
@@ -273,7 +268,6 @@
       font-size: 14px;
     }
     tbody tr:hover{ background: rgba(79,140,255,.06); }
-
     .badge{
       display:inline-flex; align-items:center; gap:8px;
       font-size: 12px; font-weight: 700;
@@ -283,12 +277,19 @@
       background: rgba(255,255,255,.03);
       white-space:nowrap;
     }
-
-    
     select option{
       color:#0f172a;
       background:#ffffff;
     }
+
+    /* Hints de validación de rango */
+    .field-hint{
+      font-size: 11px;
+      min-height: 16px;
+      margin-top: 2px;
+    }
+    .field-hint.err{ color: var(--bad); }
+    .field-hint.ok { color: var(--good); }
 
     @media (max-width: 980px){
       .app{ grid-template-columns: 1fr; }
@@ -307,7 +308,6 @@
         </div>
       </div>
 
-      
       <nav class="nav" aria-label="Navegación">
         <a href="/dashboard" id="navDashboard">
           <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -398,7 +398,6 @@
         <div class="card">
           <h3 style="margin:0 0 10px; font-size:14px; position:relative;">Registro de Consumo Diario</h3>
 
-          
           <form id="registroForm" style="position:relative;">
             <div class="row">
               <div class="field">
@@ -434,24 +433,31 @@
                 <input id="wbs" type="text" required placeholder="Ej: 1.2.3.04.005" />
               </div>
 
+              <!-- CAMBIO: destino ahora es select cargado desde /api/zonas -->
               <div class="field">
                 <label for="zona">Destino de la producción</label>
-                <input id="zona" type="text" required placeholder="Ej: Shotcrete UG / Plataforma / Fundaciones" />
+                <select id="zona" required>
+                  <option value="">Seleccione un destino</option>
+                </select>
               </div>
             </div>
 
+            <!-- CAMBIO: campos opcionales con rangos explícitos y hints -->
             <div class="row" style="margin-top:12px;">
               <div class="field">
-                <label for="arena_humedad_pct">Humedad de la arena (%)</label>
-                <input id="arena_humedad_pct" type="number" step="0.1" min="0" placeholder="Ej: 6.5" />
+                <label for="arena_humedad_pct">Humedad de la arena (%) — rango: 4 a 10</label>
+                <input id="arena_humedad_pct" type="number" step="0.1" min="4" max="10" placeholder="Ej: 6.5" />
+                <span class="field-hint" id="hint_humedad"></span>
               </div>
               <div class="field">
-                <label for="asentamiento_final_cm">Asentamiento final (cm)</label>
-                <input id="asentamiento_final_cm" type="number" step="0.1" min="0" placeholder="Ej: 18" />
+                <label for="asentamiento_final_cm">Asentamiento final (cm) — rango: 15 a 30</label>
+                <input id="asentamiento_final_cm" type="number" step="0.1" min="15" max="30" placeholder="Ej: 18" />
+                <span class="field-hint" id="hint_asentamiento"></span>
               </div>
               <div class="field">
-                <label for="temperatura_c">Temperatura de la mezcla (°C)</label>
-                <input id="temperatura_c" type="number" step="0.1" placeholder="Ej: 22.3" />
+                <label for="temperatura_c">Temperatura de la mezcla (°C) — rango: -10 a 50</label>
+                <input id="temperatura_c" type="number" step="0.1" min="-10" max="50" placeholder="Ej: 22.3" />
+                <span class="field-hint" id="hint_temperatura"></span>
               </div>
             </div>
 
@@ -466,7 +472,7 @@
         <div class="alerts" id="alertsBox" style="display:none; margin-top:24px;">
           <div id="alertaDeficit" class="hint" style="display:none;color:var(--bad);font-weight:600;margin-bottom:10px;"></div>
           <h3>Cruce consumo vs stock</h3>
-          <p class="sub">Déficit sugerido = max(consumo_estimado - stock_actual, 0). “Bajo mínimo” compara stock_actual vs mínimo configurado del material.</p>
+          <p class="sub">Déficit sugerido = max(consumo_estimado - stock_actual, 0). "Bajo mínimo" compara stock_actual vs mínimo configurado del material.</p>
           <div class="table-wrap" style="margin-top:10px;">
             <table class="alerts-table">
               <thead>
@@ -489,18 +495,22 @@
     </main>
   </div>
 
-  
   <script>
     (function(){
       const LS_USER = "ph_user";
       const u = localStorage.getItem(LS_USER);
       const lbl = document.getElementById("lblUser");
       const today = document.getElementById("todayChip");
-      if (today) today.textContent = new Date().toISOString().slice(0,10);
+      if (today) {
+        const d = new Date();
+        today.textContent = d.getFullYear() + "-" +
+          String(d.getMonth() + 1).padStart(2, "0") + "-" +
+          String(d.getDate()).padStart(2, "0");
+      }
       if (lbl){
         try {
           const obj = u ? JSON.parse(u) : null;
-          lbl.textContent = (obj && (obj.nombre || obj.usuario || obj.user)) ? (obj.nombre || obj.usuario || obj.user) : "Sin usuario";
+          lbl.textContent = (obj && (obj.nombre || obj.username || obj.usuario || obj.user)) ? (obj.nombre || obj.username || obj.usuario || obj.user) : "Sin usuario";
         } catch {
           lbl.textContent = "Sin usuario";
         }
@@ -510,13 +520,12 @@
         btnLogout.addEventListener("click", () => {
           localStorage.removeItem(LS_USER);
           sessionStorage.removeItem("ph_active_tab");
-          window.location.href = "/login";
+          window.location.href = "/logout";
         });
       }
     })();
   </script>
 
-  
   <script src="/static/js/registro.js"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional
 from utils.db import conectar, float_seguro, valor_fila, RUTA_BD
+from services.inventario import registrar_movimiento
 
 
 def _float_flexible(valor):
@@ -128,6 +129,7 @@ def insertar_despacho(
     asentamiento_final: Optional[float] = None,
     temperatura: Optional[float] = None,
     ruta_bd: str = RUTA_BD,
+    usuario_id: Optional[int] = None,
 ) -> Optional[int]:
     """
     Inserta un nuevo despacho (Produccion_Diaria) y descuenta stock de Insumos.
@@ -230,6 +232,11 @@ def insertar_despacho(
                     "UPDATE Insumos SET stock_actual = ? WHERE id_insumo = ?",
                     (nuevo_stock, id_insumo)
                 )
+                registrar_movimiento(
+                conexion, usuario_id=usuario_id, id_insumo=id_insumo,
+                cantidad=cantidad, tipo="EGRESO", fecha=fecha,
+                detalle=f"Consumo despacho #{id_produccion} ({diseno_mezcla})"
+)
 
         conexion.commit()
         return id_produccion

@@ -48,6 +48,27 @@
     }
   }
 
+  async function cargarZonas(){
+    const sel = $("zona");
+    if (!sel) return;
+    sel.innerHTML = `<option value="">Seleccione un destino</option>`;
+
+    const res = await fetch("/api/zonas", { method: "GET" });
+    if (!res.ok){
+      const txt = await res.text().catch(() => "");
+      throw new Error(`No se pudo cargar /api/zonas (HTTP ${res.status}). ${txt.slice(0,120)}`);
+    }
+
+    const data = await res.json();
+    const zonas = Array.isArray(data.zonas) ? data.zonas : [];
+    for (const z of zonas){
+      const opt = document.createElement("option");
+      opt.value = z;
+      opt.textContent = z;
+      sel.appendChild(opt);
+    }
+  }
+
   function renderAlertasRegistro(payload) {
     const box = $("alertsBox");
     const tbody = $("tbodyAlertas");
@@ -182,6 +203,7 @@
     try {
       csrfToken = await obtenerCsrfToken();
       await cargarDisenos();
+      await cargarZonas();
     } catch (err){
       console.error(err);
       alert(String(err.message || err));

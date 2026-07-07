@@ -4,6 +4,7 @@ import json
 import logging
 import time
 from dotenv import load_dotenv
+from datetime import datetime
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf import CSRFProtect
@@ -66,6 +67,17 @@ def _float_flexible(valor):
     if isinstance(valor, str):
         valor = valor.strip().replace(",", ".")
     return float(valor)
+
+
+def validar_fecha_iso(valor):
+    """Valida una fecha en formato YYYY-MM-DD."""
+    if not valor or not isinstance(valor, str):
+        return False
+    try:
+        datetime.strptime(valor, "%Y-%m-%d")
+        return True
+    except Exception:
+        return False
 
 
 def numero_no_negativo(valor, nombre_campo):
@@ -139,14 +151,18 @@ def api_dashboard():
         consumo = consumo_diario(ruta_bd=RUTA_BD)
         registros_semanal, cantidad_registros_semanal = registros_ultima_semana(ruta_bd=RUTA_BD)
 
-        with conectar() as conexion:
-            cursor = conexion.cursor()
-            cursor.execute("""
-                SELECT nombre AS material, unidad, stock_actual AS stock, stock_minimo AS minimo
-                FROM materiales
-                ORDER BY nombre
-            """)
-            inv = [dict(fila) for fila in cursor.fetchall()]
+        # Obtener inventario desde la capa de servicios y mapear
+        # a la estructura que espera el frontend (material, unidad, stock, minimo)
+        inv_raw = obtener_materiales(ruta_bd=RUTA_BD)
+        inv = [
+            {
+                "material": m.get("nombre") or m.get("nombre_insumo"),
+                "unidad": m.get("unidad"),
+                "stock": m.get("stock_actual") if m.get("stock_actual") is not None else m.get("stock", 0),
+                "minimo": m.get("stock_minimo") if m.get("stock_minimo") is not None else m.get("minimo", 0),
+            }
+            for m in (inv_raw or [])
+        ]
 
         respuesta = {
             "consumo_diario": consumo,
@@ -167,7 +183,8 @@ def api_recetas():
     try:
         with conectar() as conexion:
             cursor = conexion.cursor()
-            cursor.execute("SELECT diseno_mezcla AS codigo_diseno FROM Mezclas_Maestra ORDER BY diseno_mezcla")
+            # La tabla de diseños se llama `Disenos_Mezcla` en el esquema
+            cursor.execute("SELECT diseno_mezcla AS codigo_diseno FROM Disenos_Mezcla ORDER BY diseno_mezcla")
             filas = cursor.fetchall()
         disenos = [fila["codigo_diseno"] for fila in filas if fila["codigo_diseno"]]
         return jsonify({"ok": True, "disenos": disenos})
@@ -202,6 +219,43 @@ def api_despachos():
                 session.get("username"), request.remote_addr, errores
             )
             return jsonify({"ok": False, "error": " ".join(errores)}), 400
+        # Validaciones adicionales que también están en el frontend:
+        # Fecha válida
+        if not validar_fecha_iso(str(datos.get("fecha", ""))):
+            return jsonify({"ok": False, "error": "Fecha inválida. Usa formato YYYY-MM-DD"}), 400
+
+        # Turno, WBS y zona son obligatorios en el formulario
+        if not str(datos.get("turno", "")).strip():
+            return jsonify({"ok": False, "error": "Falta el turno del despacho"}), 400
+        if not str(datos.get("wbs", "")).strip():
+            return jsonify({"ok": False, "error": "Falta el WBS del despacho"}), 400
+        if not str(datos.get("zona", "")).strip():
+            return jsonify({"ok": False, "error": "Falta la zona/destino del despacho"}), 400
+
+        # Validar rangos opcionales (coinciden con atributos min/max en el HTML)
+        try:
+            if datos.get("arena_humedad_pct", "") not in ("", None):
+                hum = _float_flexible(datos.get("arena_humedad_pct"))
+                if hum < 4 or hum > 10:
+                    return jsonify({"ok": False, "error": "arena_humedad_pct debe estar entre 4 y 10"}), 400
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "arena_humedad_pct no es un número válido"}), 400
+
+        try:
+            if datos.get("asentamiento_final_cm", "") not in ("", None):
+                asent = _float_flexible(datos.get("asentamiento_final_cm"))
+                if asent < 15 or asent > 30:
+                    return jsonify({"ok": False, "error": "asentamiento_final_cm debe estar entre 15 y 30"}), 400
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "asentamiento_final_cm no es un número válido"}), 400
+
+        try:
+            if datos.get("temperatura_c", "") not in ("", None):
+                temp = _float_flexible(datos.get("temperatura_c"))
+                if temp < -10 or temp > 50:
+                    return jsonify({"ok": False, "error": "temperatura_c debe estar entre -10 y 50"}), 400
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "temperatura_c no es un número válido"}), 400
 
         nuevo_id = insertar_despacho(
             fecha=datos.get("fecha", ""),
@@ -214,6 +268,7 @@ def api_despachos():
             asentamiento_final=datos.get("asentamiento_final_cm", 0),
             temperatura=datos.get("temperatura_c", 0),
             ruta_bd=RUTA_BD,
+            usuario_id=session.get("usuario_id"),
         )
         if not nuevo_id:
             return jsonify({"ok": False, "error": "No se pudo insertar el despacho."}), 400
@@ -293,8 +348,16 @@ def api_materiales():
 
             if not nombre:
                 return jsonify({"ok": False, "error": "Falta el nombre del material"}), 400
+            # No permitir nombres que sean solo números
+            if nombre.isdigit():
+                return jsonify({"ok": False, "error": "El nombre del material no puede ser solo números"}), 400
             if not unidad:
                 return jsonify({"ok": False, "error": "Falta la unidad del material"}), 400
+
+            # Unidad permitida
+            unidades_permitidas = {"kg", "l", "m3", "unidad"}
+            if unidad not in unidades_permitidas:
+                return jsonify({"ok": False, "error": "Unidad inválida"}), 400
 
             stock_actual = numero_no_negativo(datos.get("stock_actual", 0), "Stock actual")
             stock_minimo = numero_no_negativo(datos.get("stock_minimo", 0), "Stock mínimo")
@@ -310,6 +373,7 @@ def api_materiales():
                 stock_minimo=stock_minimo,
                 stock_maximo=stock_maximo,
                 ruta_bd=RUTA_BD,
+                usuario_id=session.get("usuario_id"),
             )
 
             if not nuevo_id:
@@ -338,6 +402,7 @@ def api_materiales():
             stock_minimo=stock_minimo,
             stock_maximo=stock_maximo,
             ruta_bd=RUTA_BD,
+            usuario_id=session.get("usuario_id"),
         )
         if not actualizado:
             return jsonify({"ok": False, "error": "Material no encontrado"}), 404
@@ -416,6 +481,23 @@ def api_alertas_consumo():
         logging.exception("Error en /api/alertas_consumo")
         return jsonify({"ok": False, "error": str(e)}), 500
 
+# ===== API ZONAS =====
+
+@app.route("/api/zonas")
+@cualquier_usuario
+def api_zonas():
+    try:
+        with conectar(RUTA_BD) as conexion:
+            cursor = conexion.cursor()
+            cursor.execute(
+                "SELECT nombre_zona FROM Zonas ORDER BY nombre_zona"
+            )
+            zonas = [fila["nombre_zona"] for fila in cursor.fetchall()]
+        return jsonify({"ok": True, "zonas": zonas})
+    except Exception:
+        logging.exception("Error en /api/zonas")
+        return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
+
 # ===== API CRUCE CONSUMO VS STOCK =====
 
 @app.route("/api/cruce_consumo_registro", methods=["POST"])
@@ -428,9 +510,12 @@ def api_cruce_consumo_registro():
 
         diseno = datos.get("diseno_mezcla")
         volumen_raw = datos.get("volumen_m3")
+        fecha = datos.get("fecha")
 
         if not diseno or volumen_raw in (None, ""):
             return jsonify({"ok": False, "error": "Faltan diseno_mezcla o volumen"}), 400
+        if not fecha or not validar_fecha_iso(str(fecha)):
+            return jsonify({"ok": False, "error": "Falta o es inválida la fecha (YYYY-MM-DD)"}), 400
 
         try:
             volumen = _float_flexible(volumen_raw)
