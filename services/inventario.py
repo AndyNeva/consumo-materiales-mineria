@@ -18,8 +18,8 @@ def registrar_movimiento(
     from datetime import date
     conexion.execute(
         """
-        INSERT INTO movimientos (usuario_id, id_insumo, cantidad, fecha, tipo, proveedor, detalle)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO movimientos (usuario_id, id_insumo, cantidad, fecha, tipo)
+        VALUES (?, ?, ?, ?, ?)
         """,
         (usuario_id, id_insumo, cantidad, fecha or date.today().isoformat(), tipo)
     )
