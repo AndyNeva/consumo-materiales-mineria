@@ -10,8 +10,10 @@ EXCEL_PATH = os.path.join(BASE_DIR, "data", "raw", "Batch_Plant_Production_2025.
 
 def obtener_o_crear_zona(cursor, nombre_zona):
     nombre = str(nombre_zona).strip()
-    if not nombre or nombre in ['nan', '-', '', 'None']:
+    if not nombre.upper().startswith("ZONA_") or nombre in ['nan', '-', '', 'None']:
         nombre = 'DESCONOCIDO'
+    else:
+        nombre = nombre.upper()
     cursor.execute("SELECT id_zona FROM Zonas WHERE nombre_zona = ?", (nombre,))
     fila = cursor.fetchone()
     if fila:
