@@ -235,8 +235,7 @@ def insertar_despacho(
                 registrar_movimiento(
                 conexion, usuario_id=usuario_id, id_insumo=id_insumo,
                 cantidad=cantidad, tipo="EGRESO", fecha=fecha,
-                detalle=f"Consumo despacho #{id_produccion} ({diseno_mezcla})"
-)
+                )
 
         conexion.commit()
         return id_produccion

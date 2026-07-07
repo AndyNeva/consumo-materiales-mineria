@@ -10,8 +10,6 @@ def registrar_movimiento(
     cantidad: float,
     tipo: str,          # "INGRESO" | "EGRESO" | "AJUSTE"
     fecha: Optional[str] = None,
-    proveedor: Optional[str] = None,
-    detalle: Optional[str] = None,
 ) -> None:
     """
     Registra un movimiento de inventario para trazabilidad/auditoría.
@@ -23,7 +21,7 @@ def registrar_movimiento(
         INSERT INTO movimientos (usuario_id, id_insumo, cantidad, fecha, tipo, proveedor, detalle)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (usuario_id, id_insumo, cantidad, fecha or date.today().isoformat(), tipo, proveedor, detalle)
+        (usuario_id, id_insumo, cantidad, fecha or date.today().isoformat(), tipo)
     )
 
 def _material_por_nombre(conexion, nombre: str):
@@ -113,7 +111,7 @@ def actualizar_material(
                 if diferencia != 0:
                     registrar_movimiento(
                         conexion, usuario_id, material_id, abs(diferencia),
-                        tipo="AJUSTE", detalle=f"Ajuste manual de stock ({'+' if diferencia>0 else ''}{diferencia})"
+                        tipo="AJUSTE"
                     )
 
     parametros.append(material_id)
@@ -172,7 +170,6 @@ def agregar_material(
                 cantidad=float(stock_actual),
                 tipo="INGRESO",
                 usuario_id=usuario_id,
-                detalle=f"Alta de material '{nombre}' con stock inicial",
             )
 
         conexion.commit()
