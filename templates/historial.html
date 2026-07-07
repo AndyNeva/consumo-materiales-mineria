@@ -207,10 +207,10 @@
       </div>
 
       <nav class="nav" aria-label="Navegación">
-        <a href="/dashboard">Dashboard</a>
-        <a href="/registro">Registro diario</a>
-        <a href="/inventario">Inventario</a>
-        <a class="active" href="/historial" aria-current="page">Historial</a>
+        <a href="/dashboard" data-ruta="dashboard">Dashboard</a>
+        <a href="/registro" data-ruta="registro">Registro diario</a>
+        <a href="/inventario" data-ruta="inventario">Inventario</a>
+        <a class="active" href="/historial" aria-current="page" data-ruta="historial">Historial</a>
       </nav>
       <div class="spacer"></div>
 
@@ -327,32 +327,48 @@
   </div>
 
     <script>
-    // Poblar chip de usuario desde localStorage (mismo patrón que dashboard/registro)
-    (function poblarSesion(){
-      const lbl = document.getElementById("lblUser");
-      const today = document.getElementById("todayChip");
-      if(today) {
-        const d = new Date();
-        today.textContent = d.getFullYear() + "-" +
-          String(d.getMonth() + 1).padStart(2, "0") + "-" +
-          String(d.getDate()).padStart(2, "0");
+      // Ocultar/mostrar botones del sidebar segun el rol (espejo de app.py)
+      function aplicarPermisosNav(rol){
+        const PERMISOS = {
+          "Admin":        ["dashboard","registro","inventario","historial"],
+          "Operador":     ["dashboard","registro","historial"],
+          "Visualizador": ["dashboard"],
+        };
+        const permitidas = PERMISOS[rol] || ["dashboard"];
+        document.querySelectorAll('.nav a[data-ruta]').forEach(a => {
+          a.style.display = permitidas.includes(a.dataset.ruta) ? "" : "none";
+        });
       }
-      if(!lbl) return;
-      try {
-        const u = localStorage.getItem("ph_user");
-        const obj = u ? JSON.parse(u) : null;
-        lbl.textContent = (obj && (obj.username || obj.nombre || obj.usuario || obj.user)) ? (obj.username || obj.nombre || obj.usuario || obj.user) : "Sin usuario";
-      } catch {
-        lbl.textContent = "Sin usuario";
-      }
-      const btn = document.getElementById("btnLogout");
-      if(btn) btn.addEventListener("click", () => {
-        localStorage.removeItem("ph_user");
-        sessionStorage.removeItem("ph_active_tab");
-        window.location.href = "/logout";
-      });
-    })();
-  </script>
+
+      // Poblar chip de usuario + aplicar permisos del nav
+      (function poblarSesion(){
+        const lbl = document.getElementById("lblUser");
+        const today = document.getElementById("todayChip");
+        if(today) {
+          const d = new Date();
+          today.textContent = d.getFullYear() + "-" +
+            String(d.getMonth() + 1).padStart(2, "0") + "-" +
+            String(d.getDate()).padStart(2, "0");
+        }
+        if(lbl){
+          try {
+            const u = localStorage.getItem("ph_user");
+            const obj = u ? JSON.parse(u) : null;
+            lbl.textContent = (obj && (obj.username || obj.nombre || obj.usuario || obj.user)) ? (obj.username || obj.nombre || obj.usuario || obj.user) : "Sin usuario";
+            aplicarPermisosNav(obj ? (obj.rol || obj.role) : null);
+          } catch {
+            lbl.textContent = "Sin usuario";
+            aplicarPermisosNav(null);
+          }
+        }
+        const btn = document.getElementById("btnLogout");
+        if(btn) btn.addEventListener("click", () => {
+          localStorage.removeItem("ph_user");
+          sessionStorage.removeItem("ph_active_tab");
+          window.location.href = "/logout";
+        });
+      })();
+    </script>
   <script src="/static/js/historial.js"></script>
 </body>
 </html>
