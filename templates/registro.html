@@ -501,11 +501,16 @@
       const u = localStorage.getItem(LS_USER);
       const lbl = document.getElementById("lblUser");
       const today = document.getElementById("todayChip");
-      if (today) today.textContent = new Date().toISOString().slice(0,10);
+      if (today) {
+        const d = new Date();
+        today.textContent = d.getFullYear() + "-" +
+          String(d.getMonth() + 1).padStart(2, "0") + "-" +
+          String(d.getDate()).padStart(2, "0");
+      }
       if (lbl){
         try {
           const obj = u ? JSON.parse(u) : null;
-          lbl.textContent = (obj && (obj.nombre || obj.usuario || obj.user)) ? (obj.nombre || obj.usuario || obj.user) : "Sin usuario";
+          lbl.textContent = (obj && (obj.nombre || obj.username || obj.usuario || obj.user)) ? (obj.nombre || obj.username || obj.usuario || obj.user) : "Sin usuario";
         } catch {
           lbl.textContent = "Sin usuario";
         }

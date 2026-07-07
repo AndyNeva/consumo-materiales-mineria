@@ -41,40 +41,34 @@ body{
 }
 a{color:inherit;text-decoration:none}
 .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
-aside{
-  padding:20px;
+.sidebar{
+  padding:22px 18px;
   background:linear-gradient(180deg,rgba(15,26,46,.95),rgba(12,22,40,.88));
   border-right:1px solid var(--border);
   display:flex;
   flex-direction:column;
+  position:sticky;
+  top:0;
+  height:100vh;
+  overflow-y:auto;
 }
-.brand{font-weight:700;margin-bottom:4px}
-.brand-sub{opacity:.72;font-size:13px;margin-bottom:18px}
-.nav{display:flex;flex-direction:column;gap:8px}
-.nav a{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:10px 14px;
-  border-radius:12px;
-  color:#e6edf7;
-  background:rgba(255,255,255,.02);
-  border:1px solid transparent;
-}
-.nav a.active{background:linear-gradient(90deg,#1f3b6d,#162a4f);border-color:rgba(79,140,255,.35)}
-.nav a:hover{background:rgba(255,255,255,.06)}
-.logout{margin-top:auto}
-.logout button{
-  width:100%;
-  padding:10px;
-  border-radius:14px;
-  border:1px solid rgba(239,68,68,.25);
-  background:rgba(239,68,68,.12);
-  color:#fff;
-  cursor:pointer;
-  font-weight:700;
-}
-.logout button:hover{background:rgba(239,68,68,.2)}
+.brand{display:flex;align-items:center;gap:12px;padding:10px 10px 16px 10px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.logo{width:38px;height:38px;border-radius:12px;background:radial-gradient(circle at 30% 30%,rgba(121,167,255,.85),rgba(79,140,255,.55) 45%,rgba(34,197,94,.25));box-shadow:inset 0 0 0 1px rgba(255,255,255,.10)}
+.brand h1{margin:0;font-size:14px;font-weight:650;line-height:1.2}
+.brand small{display:block;margin-top:3px;font-size:12px;color:var(--muted);font-weight:500}
+.nav{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;border:1px solid transparent;color:rgba(255,255,255,.86);background:transparent;transition:transform .12s ease,background .12s ease,border-color .12s ease}
+.nav a:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08);transform:translateY(-1px)}
+.nav a.active{background:linear-gradient(180deg,rgba(79,140,255,.18),rgba(79,140,255,.08));border-color:rgba(79,140,255,.35)}
+.icon{width:18px;height:18px;flex:0 0 18px;opacity:.92}
+.spacer{flex:1}
+.userbox{margin-top:18px;padding:14px 12px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+.userline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.chip{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;padding:5px 8px;border-radius:999px;background:rgba(79,140,255,.14);border:1px solid rgba(79,140,255,.25);color:rgba(255,255,255,.90);white-space:nowrap}
+/* Boton logout del sidebar — mas especifico que el .btn azul de la tabla */
+.btn.danger{width:100%;padding:10px 12px;border-radius:14px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.12);color:#fff;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s ease,background .12s ease,border-color .12s ease}
+.btn.danger:hover{background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.35);transform:translateY(-1px)}
+
 main{padding:24px 28px 40px}
 h1{margin:0 0 6px;font-size:26px}
 .subtitle{opacity:.72;margin-bottom:18px;line-height:1.4}
@@ -134,7 +128,7 @@ tbody tr:nth-child(even){background:rgba(10,18,35,.6)}
 .status.ok-text{color:#86efac}.status.err-text{color:#fecaca}
 @media (max-width:980px){
   .app{grid-template-columns:1fr}
-  aside{position:relative;min-height:auto}
+  .sidebar{position:relative;height:auto;overflow-y:visible}
   .form-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}
 }
 </style>
@@ -142,21 +136,45 @@ tbody tr:nth-child(even){background:rgba(10,18,35,.6)}
 
 <body>
 <div class="app">
-  <aside>
-    <div class="brand">Planta de Hormigón</div>
-    <div class="brand-sub">Control de producción & inventario</div>
+  <aside class="sidebar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>Planta de Hormigón</h1>
+          <small>Control de producción & inventario</small>
+        </div>
+      </div>
 
-    <nav class="nav">
-      <a href="/dashboard">Dashboard</a>
-      <a href="/registro">Registro diario</a>
-      <a href="/inventario" class="active">Inventario</a>
-      <a href="/historial">Historial</a>
-    </nav>
+      <nav class="nav" aria-label="Navegación">
+        <a href="/dashboard">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 13.5V21h7v-7.5H3Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 3v9h7V3h-7Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 14.5V21h7v-6.5h-7Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 3v8h7V3H3Z" stroke="currentColor" stroke-width="1.8"/></svg>
+          Dashboard</a>
+        <a href="/registro">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h10a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2V6a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h8M9 13h8M9 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Registro diario</a>
+        <a class="active" href="/inventario" aria-current="page">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 8v10l9 5 9-5V8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 13v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Inventario</a>
+        <a href="/historial">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 6h14M7 12h14M7 18h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M3.5 6h.5M3.5 12h.5M3.5 18h.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          Historial</a>
+      </nav>
 
-    <div class="logout">
-      <button id="btnLogout" type="button">Cerrar sesión</button>
-    </div>
-  </aside>
+      <div class="spacer"></div>
+
+      <div class="userbox">
+        <div class="userline">
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Sesión</div>
+            <div id="lblUser" class="chip">Sin usuario</div>
+          </div>
+          <div class="chip" id="todayChip">—</div>
+        </div>
+        <button class="btn danger" id="btnLogout" type="button">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 7V6a2 2 0 0 1 2-2h7v16h-7a2 2 0 0 1-2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 12H4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 9l-3 3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Cerrar sesión</button>
+      </div>
+    </aside>
 
   <main>
     <h1>Inventario</h1>
@@ -495,10 +513,31 @@ function wireEvents(){
     });
   }
 
+  // Poblar chip de usuario desde localStorage (mismo patrón que dashboard/registro)
+  (function poblarSesion(){
+    const lbl = $("lblUser");
+    const today = $("todayChip");
+    if(today) {
+      const d = new Date();
+      today.textContent = d.getFullYear() + "-" +
+        String(d.getMonth() + 1).padStart(2, "0") + "-" +
+        String(d.getDate()).padStart(2, "0");
+    }
+    if(!lbl) return;
+    try {
+      const u = localStorage.getItem("ph_user");
+      const obj = u ? JSON.parse(u) : null;
+      lbl.textContent = (obj && (obj.username || obj.nombre || obj.usuario || obj.user)) ? (obj.username || obj.nombre || obj.usuario || obj.user) : "Sin usuario";
+    } catch {
+      lbl.textContent = "Sin usuario";
+    }
+  })();
+
   const logout = $("btnLogout");
   if(logout){
     logout.addEventListener("click", () => {
       localStorage.removeItem("ph_user");
+      sessionStorage.removeItem("ph_active_tab");
       window.location.href = "/logout";
     });
   }
