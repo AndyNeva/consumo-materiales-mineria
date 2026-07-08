@@ -92,19 +92,6 @@
     };
   }
 
-  // Ocultar/mostrar botones del sidebar segun el rol (espejo de app.py)
-  function aplicarPermisosNav(rol){
-    const PERMISOS = {
-      "Admin":        ["dashboard","registro","inventario","historial"],
-      "Operador":     ["dashboard","registro","historial"],
-      "Visualizador": ["dashboard"],
-    };
-    const permitidas = PERMISOS[rol] || ["dashboard"];
-    document.querySelectorAll('.nav a[data-ruta]').forEach(a => {
-      a.style.display = permitidas.includes(a.dataset.ruta) ? "" : "none";
-    });
-  }
-
   // ====== Render ======
   function renderSession() {
     const user = safeJsonParse(localStorage.getItem(LS_USER), null);
@@ -116,9 +103,6 @@
     const todayChip = document.getElementById("todayChip");
     if (lblUser) lblUser.textContent = userName;
     if (todayChip) todayChip.textContent = getTodayISO();
-
-    // Aplicar visibilidad del nav segun el rol
-    aplicarPermisosNav(user ? (user.rol || user.role) : null);
 
     if (!localStorage.getItem(LS_USER)) {
       toast("Sesión", "No se detectó usuario guardado. Puedes iniciar sesión desde /login.");
