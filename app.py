@@ -126,7 +126,7 @@ def registro():
     return render_template("registro.html")
 
 @app.route("/inventario")
-@solo_admin
+@admin_u_operador
 def inventario():
     return render_template("inventario.html")
 
@@ -344,7 +344,7 @@ def api_historial_consumo():
 # ===== API MATERIALES =====
 
 @app.route("/api/materiales", methods=["GET", "POST"])
-@solo_admin
+@admin_u_operador
 def api_materiales():
     """Gestión de inventario de materiales.
 
@@ -358,6 +358,13 @@ def api_materiales():
         except Exception:
             logging.exception("Error en GET /api/materiales")
             return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
+
+    if session.get("rol") != "Admin":
+        logger_seguridad.warning(
+            "Intento de edición de inventario sin rol Admin | usuario=%s rol=%s ip=%s",
+            session.get("username"), session.get("rol"), request.remote_addr
+        )
+        return jsonify({"ok": False, "error": "Solo el Administrador puede crear o editar el inventario"}), 403
 
     try:
         datos = request.get_json(force=True) or {}

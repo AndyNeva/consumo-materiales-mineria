@@ -146,16 +146,16 @@ tbody tr:nth-child(even){background:rgba(10,18,35,.6)}
       </div>
 
       <nav class="nav" aria-label="Navegación">
-        <a href="/dashboard" data-ruta="dashboard">
+        <a href="/dashboard">
           <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 13.5V21h7v-7.5H3Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 3v9h7V3h-7Z" stroke="currentColor" stroke-width="1.8"/><path d="M14 14.5V21h7v-6.5h-7Z" stroke="currentColor" stroke-width="1.8"/><path d="M3 3v8h7V3H3Z" stroke="currentColor" stroke-width="1.8"/></svg>
           Dashboard</a>
-        <a href="/registro" data-ruta="registro">
+        <a href="/registro">
           <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h10a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2V6a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h8M9 13h8M9 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           Registro diario</a>
-        <a class="active" href="/inventario" aria-current="page" data-ruta="inventario">
+        <a class="active" href="/inventario" aria-current="page">
           <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 8v10l9 5 9-5V8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 13v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           Inventario</a>
-        <a href="/historial" data-ruta="historial">
+        <a href="/historial">
           <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 6h14M7 12h14M7 18h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M3.5 6h.5M3.5 12h.5M3.5 18h.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
           Historial</a>
       </nav>
@@ -513,20 +513,7 @@ function wireEvents(){
     });
   }
 
-  // Ocultar/mostrar botones del sidebar segun el rol (espejo de app.py)
-  function aplicarPermisosNav(rol){
-    const PERMISOS = {
-      "Admin":        ["dashboard","registro","inventario","historial"],
-      "Operador":     ["dashboard","registro","historial"],
-      "Visualizador": ["dashboard"],
-    };
-    const permitidas = PERMISOS[rol] || ["dashboard"];
-    document.querySelectorAll('.nav a[data-ruta]').forEach(a => {
-      a.style.display = permitidas.includes(a.dataset.ruta) ? "" : "none";
-    });
-  }
-
-  // Poblar chip de usuario + aplicar permisos del nav
+  // Poblar chip de usuario desde localStorage (mismo patrón que dashboard/registro)
   (function poblarSesion(){
     const lbl = $("lblUser");
     const today = $("todayChip");
@@ -536,16 +523,13 @@ function wireEvents(){
         String(d.getMonth() + 1).padStart(2, "0") + "-" +
         String(d.getDate()).padStart(2, "0");
     }
-    if(lbl){
-      try {
-        const u = localStorage.getItem("ph_user");
-        const obj = u ? JSON.parse(u) : null;
-        lbl.textContent = (obj && (obj.username || obj.nombre || obj.usuario || obj.user)) ? (obj.username || obj.nombre || obj.usuario || obj.user) : "Sin usuario";
-        aplicarPermisosNav(obj ? (obj.rol || obj.role) : null);
-      } catch {
-        lbl.textContent = "Sin usuario";
-        aplicarPermisosNav(null);
-      }
+    if(!lbl) return;
+    try {
+      const u = localStorage.getItem("ph_user");
+      const obj = u ? JSON.parse(u) : null;
+      lbl.textContent = (obj && (obj.username || obj.nombre || obj.usuario || obj.user)) ? (obj.username || obj.nombre || obj.usuario || obj.user) : "Sin usuario";
+    } catch {
+      lbl.textContent = "Sin usuario";
     }
   })();
 
