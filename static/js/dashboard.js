@@ -95,13 +95,13 @@
   // ====== Render ======
   function renderSession() {
     const user = safeJsonParse(localStorage.getItem(LS_USER), null);
-    const userName = (user && (user.nombre || user.user || user.usuario))
-      ? (user.nombre || user.user || user.usuario)
+    const userName = (user && (user.nombre || user.username || user.user || user.usuario))
+      ? (user.nombre || user.username || user.user || user.usuario)
       : "Sin usuario";
 
-    const userChip = document.getElementById("userChip");
+    const lblUser = document.getElementById("lblUser");
     const todayChip = document.getElementById("todayChip");
-    if (userChip) userChip.textContent = userName;
+    if (lblUser) lblUser.textContent = userName;
     if (todayChip) todayChip.textContent = getTodayISO();
 
     if (!localStorage.getItem(LS_USER)) {
@@ -209,10 +209,10 @@
 
   // ====== Events ======
   function wireLogout() {
-    const logoutBtn = document.getElementById("logoutBtn");
-    if (!logoutBtn) return;
+    const btnLogout = document.getElementById("btnLogout");
+    if (!btnLogout) return;
 
-    logoutBtn.addEventListener("click", () => {
+    btnLogout.addEventListener("click", () => {
       localStorage.removeItem(LS_USER);
       sessionStorage.removeItem("ph_active_tab");
       window.location.href = "/login";

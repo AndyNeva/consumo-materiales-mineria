@@ -11,7 +11,9 @@ RUTA_BD = os.getenv("DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.p
 _TABLAS_PERMITIDAS = frozenset({
     "despachos", "materiales", "usuarios",
     "recetas", "movimientos", "centros_costos", "zonas",
-    "intentos_login"
+    "Produccion_Diaria", "Produccion_Insumos", "Insumos",
+    "Disenos_Mezcla", "Receta_Detalle", "Zonas", "Centros_Costo",
+    "intentos_login", "Turnos"
 })
 
 def conectar(ruta_bd: str = RUTA_BD) -> sqlite3.Connection:

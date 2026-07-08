@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
-from utils.db import conectar, columnas_tabla, float_seguro, RUTA_BD
+from utils.db import conectar, float_seguro, RUTA_BD
 
 
 def obtener_historial_consumo(
@@ -14,55 +14,83 @@ def obtener_historial_consumo(
 ) -> List[Dict[str, Any]]:
     """
     Obtiene historial de despachos con filtros opcionales usando SQL puro.
-
-    Args:
-        inicio (str): Fecha de inicio en formato YYYY-MM-DD.
-        fin (str): Fecha de fin en formato YYYY-MM-DD.
-        diseno (str): Código de diseño de mezcla (opcional).
-        zona (str): Zona o destino (opcional).
-        turno (str): Turno de trabajo (opcional).
-        wbs (str): Código WBS (opcional).
-        ruta_bd (str): Ruta a la base de datos.
-
-    Returns:
-        List[Dict]: Lista de despachos que cumplen los filtros.
+    Pivota los consumos reales para retornar la estructura plana legacy.
     """
     with conectar(ruta_bd) as conexion:
-        columnas = columnas_tabla(conexion, "despachos")
-
-        condiciones = ["fecha >= ? AND fecha <= ?"]
+        condiciones = ["pd.fecha >= ? AND pd.fecha <= ?"]
         parametros: List[Any] = [inicio, fin]
 
         if diseno:
-            condiciones.append("diseno_mezcla = ?")
+            condiciones.append("m.diseno_mezcla = ?")
             parametros.append(diseno)
         if zona:
-            condiciones.append("zona LIKE ?")
+            condiciones.append("z.nombre_zona LIKE ?")
             parametros.append(f"%{zona}%")
         if turno:
-            condiciones.append("turno = ?")
+            condiciones.append("t.nombre_turno = ?")
             parametros.append(turno)
         if wbs:
-            condiciones.append("wbs LIKE ?")
+            condiciones.append("cc.codigo_cc LIKE ?")
             parametros.append(f"%{wbs}%")
 
-        columnas_seleccion = [
-            "id", "fecha", "diseno_mezcla", "zona", "turno", "wbs", "volumen_m3",
-            "arena_kg", "grava_kg", "cemento_kg", "agua_kg",
-            "aditivo_rheo_sika115", "aditivo_basf_sika200", "aditivo_delvo",
-            "aditivo_glenium_7950", "aditivo_glenium_7970", "aditivo_fibras",
-            "arena_humedad_pct", "asentamiento_final_cm", "temperatura_c",
-        ]
-        columnas_finales = [c for c in columnas_seleccion if c in columnas]
-
         sql = f"""
-            SELECT {", ".join(columnas_finales)}
-            FROM despachos
+            SELECT 
+                pd.id_produccion AS id,
+                pd.fecha,
+                m.diseno_mezcla,
+                z.nombre_zona AS zona,
+                t.nombre_turno AS turno,
+                cc.codigo_cc AS wbs,
+                pd.volumen_m3,
+                pd.arena_humedad_pct,
+                pd.asentamiento_final_cm,
+                pd.temperatura_c
+            FROM Produccion_Diaria pd
+            LEFT JOIN Disenos_Mezcla m ON pd.diseno_mezcla = m.diseno_mezcla
+            LEFT JOIN Zonas z ON pd.id_zona = z.id_zona
+            LEFT JOIN Centros_Costo cc ON pd.id_cc = cc.id_cc
+            LEFT JOIN Turnos t ON pd.id_turno = t.id_turno
             WHERE {" AND ".join(condiciones)}
-            ORDER BY fecha ASC, id ASC
+            ORDER BY pd.fecha ASC, pd.id_produccion ASC
         """
         cursor = conexion.execute(sql, parametros)
-        return [dict(fila) for fila in cursor.fetchall()]
+        filas = [dict(fila) for fila in cursor.fetchall()]
+
+        if not filas:
+            return []
+
+        # Mapa para pivotar nombres de insumos a columnas legacy
+        mapeo_insumo_a_columna = {
+            "arena": "arena_kg",
+            "grava": "grava_kg",
+            "cemento": "cemento_kg",
+            "agua": "agua_kg",
+            "rheo 1000": "aditivo_rheo_sika115",
+            "basf 719": "aditivo_basf_sika200",
+            "delvo": "aditivo_delvo",
+            "glenium 7950": "aditivo_glenium_7950",
+            "glenium 7970": "aditivo_glenium_7970",
+            "fibras": "aditivo_fibras",
+        }
+
+        for fila in filas:
+            for col in mapeo_insumo_a_columna.values():
+                fila[col] = 0.0
+
+            cursor_c = conexion.execute("""
+                SELECT pi.cantidad_real, i.nombre_insumo
+                FROM Produccion_Insumos pi
+                JOIN Insumos i ON pi.id_insumo = i.id_insumo
+                WHERE pi.id_produccion = ?
+            """, (fila["id"],))
+
+            for cons in cursor_c.fetchall():
+                nombre = str(cons["nombre_insumo"]).lower()
+                col = mapeo_insumo_a_columna.get(nombre)
+                if col:
+                    fila[col] = float(cons["cantidad_real"] or 0.0)
+
+        return filas
 
 
 def cruce_consumo_por_rango(
@@ -76,18 +104,6 @@ def cruce_consumo_por_rango(
 ) -> Dict[str, Any]:
     """
     Suma total de consumos de materiales en un rango de fechas.
-
-    Args:
-        inicio (str): Fecha de inicio en formato YYYY-MM-DD.
-        fin (str): Fecha de fin en formato YYYY-MM-DD.
-        diseno (str): Filtro por diseño de mezcla (opcional).
-        zona (str): Filtro por zona (opcional).
-        turno (str): Filtro por turno (opcional).
-        wbs (str): Filtro por WBS (opcional).
-        ruta_bd (str): Ruta a la base de datos.
-
-    Returns:
-        Dict: Totales de consumo por material en el rango.
     """
     filas = obtener_historial_consumo(inicio, fin, diseno, zona, turno, wbs, ruta_bd=ruta_bd)
 

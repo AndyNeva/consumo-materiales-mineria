@@ -37,6 +37,12 @@
       padding:22px 18px;
       background: linear-gradient(180deg, rgba(15,26,46,.95), rgba(12,22,40,.88));
       border-right:1px solid var(--border);
+      display:flex;
+      flex-direction:column;
+      position:sticky;
+      top:0;
+      height:100vh;
+      overflow-y:auto;
     }
     .brand{display:flex;align-items:center;gap:12px;padding:10px 10px 16px;border-bottom:1px solid var(--border);margin-bottom:16px}
     .logo{width:38px;height:38px;border-radius:12px;background: radial-gradient(circle at 30% 30%, rgba(121,167,255,.85), rgba(79,140,255,.55) 45%, rgba(34,197,94,.25));box-shadow: inset 0 0 0 1px rgba(255,255,255,.10);}
@@ -126,7 +132,7 @@
     tbody tr:hover{background:rgba(79,140,255,.06)}
     .hint{margin-top:10px;font-size:12px;color:var(--muted)}
     select option{color:#0f172a;background:#fff}
-    @media(max-width:980px){.app{grid-template-columns:1fr}.sidebar{display:none}}
+    @media(max-width:980px){.app{grid-template-columns:1fr}.sidebar{position:relative;height:auto;overflow-y:visible}}
 
     .summary{
       margin-top:14px;
@@ -149,6 +155,44 @@
     }
     .sum-card .k{font-size:11px;color:var(--muted);font-family:var(--mono)}
     .sum-card .v{font-size:14px;margin-top:4px;font-weight:800}
+  
+    .spacer{flex:1}
+    .userbox{
+      margin-top:18px;
+      padding:14px 12px;
+      border-radius:16px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--border);
+    }
+    .userline{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .btn-logout{
+      width:100%;
+      padding:10px 12px;
+      border-radius:14px;
+      background:rgba(239,68,68,.10);
+      border:1px solid rgba(239,68,68,.25);
+      color:rgba(255,255,255,.92);
+      cursor:pointer;
+      font-weight:600;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      transition:transform .12s ease,background .12s ease,border-color .12s ease;
+    }
+    .btn-logout:hover{transform:translateY(-1px);background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.35)}
+  
+    /* Estilos estandar del boton logout */
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--border);color:rgba(255,255,255,.92);cursor:pointer;font-weight:600;width:100%;justify-content:center;transition:transform .12s ease,background .12s ease,border-color .12s ease}
+    .btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+    .btn.danger{background:rgba(239,68,68,.10);border-color:rgba(239,68,68,.25)}
+    .btn.danger:hover{background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.35)}
   </style>
 </head>
 <body>
@@ -169,6 +213,20 @@
         <a class="active" href="/historial" aria-current="page">Historial</a>
         {% if session.get("rol") == "Admin" %}<a href="/usuarios">Usuarios</a>{% endif %}
       </nav>
+      <div class="spacer"></div>
+
+      <div class="userbox">
+        <div class="userline">
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Sesión</div>
+            <div id="lblUser" class="chip">Sin usuario</div>
+          </div>
+          <div class="chip" id="todayChip">—</div>
+        </div>
+        <button class="btn danger" id="btnLogout" type="button">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 7V6a2 2 0 0 1 2-2h7v16h-7a2 2 0 0 1-2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 12H4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 9l-3 3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Cerrar sesión</button>
+      </div>
     </aside>
 
     <main class="main">
@@ -269,6 +327,33 @@
     </main>
   </div>
 
+    <script>
+    // Poblar chip de usuario desde localStorage (mismo patrón que dashboard/registro)
+    (function poblarSesion(){
+      const lbl = document.getElementById("lblUser");
+      const today = document.getElementById("todayChip");
+      if(today) {
+        const d = new Date();
+        today.textContent = d.getFullYear() + "-" +
+          String(d.getMonth() + 1).padStart(2, "0") + "-" +
+          String(d.getDate()).padStart(2, "0");
+      }
+      if(!lbl) return;
+      try {
+        const u = localStorage.getItem("ph_user");
+        const obj = u ? JSON.parse(u) : null;
+        lbl.textContent = (obj && (obj.username || obj.nombre || obj.usuario || obj.user)) ? (obj.username || obj.nombre || obj.usuario || obj.user) : "Sin usuario";
+      } catch {
+        lbl.textContent = "Sin usuario";
+      }
+      const btn = document.getElementById("btnLogout");
+      if(btn) btn.addEventListener("click", () => {
+        localStorage.removeItem("ph_user");
+        sessionStorage.removeItem("ph_active_tab");
+        window.location.href = "/logout";
+      });
+    })();
+  </script>
   <script src="/static/js/historial.js"></script>
 </body>
 </html>
