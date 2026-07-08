@@ -151,16 +151,6 @@ def _limpiar_intentos(username: str, ip: str) -> None:
 # Acceso a la base de datos (consultas parametrizadas)
 # ---------------------------------------------------------------------------
 
-def asegurar_columna_password(conexion) -> None:
-    """Asegura que la tabla usuarios tenga la columna password_hash."""
-    cursor = conexion.cursor()
-    cursor.execute("PRAGMA table_info(usuarios)")
-    columnas = [fila["name"] for fila in cursor.fetchall()]
-
-    if "password_hash" not in columnas:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN password_hash TEXT")
-
-
 def buscar_usuario(username: str) -> dict | None:
     """
     Busca un usuario por username usando consulta PARAMETRIZADA.
@@ -169,7 +159,6 @@ def buscar_usuario(username: str) -> dict | None:
     Devuelve un dict con id, username, rol y password_hash, o None.
     """
     with conectar() as conexion:
-        asegurar_columna_password(conexion)
         cursor = conexion.cursor()
         cursor.execute(
             "SELECT id, username, rol, password_hash "
