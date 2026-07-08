@@ -1,6 +1,7 @@
 "use strict";
 
 let usuarios = [];
+let csrfToken = "";
 
 const $ = (id) => document.getElementById(id);
 
@@ -37,6 +38,12 @@ function actualizarChecks(){
     if(el) el.classList.toggle("ok", Boolean(ok));
   });
   return validacion;
+}
+
+async function obtenerCsrfToken(){
+  const res = await fetch("/api/csrf-token");
+  const json = await res.json().catch(() => ({}));
+  return json.csrf_token || "";
 }
 
 async function cargarUsuarios(){
@@ -105,10 +112,14 @@ async function guardarUsuario(event){
   }
 
   try{
+    if(!csrfToken) csrfToken = await obtenerCsrfToken();
     setStatus("formStatus", "Guardando usuario...");
     const res = await fetch("/api/usuarios", {
       method:"POST",
-      headers:{"Content-Type":"application/json"},
+      headers:{
+        "Content-Type":"application/json",
+        "X-CSRFToken": csrfToken,
+      },
       body:JSON.stringify({ username, password, rol })
     });
     const json = await res.json().catch(() => ({}));
@@ -146,4 +157,8 @@ function wireEvents(){
 
 wireEvents();
 actualizarChecks();
+csrfToken = csrfDesdePagina();
+if (!csrfToken) {
+  obtenerCsrfToken().then((token) => { csrfToken = token; }).catch((err) => console.error(err));
+}
 cargarUsuarios();

@@ -138,7 +138,7 @@ def historial():
 @app.route("/usuarios")
 @solo_admin
 def usuarios():
-    return render_template("usuarios.html")
+    return render_template("usuarios.html", csrf_token=generate_csrf())
 
 # ===== API USUARIOS =====
 
