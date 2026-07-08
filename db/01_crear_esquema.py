@@ -145,6 +145,18 @@ def crear_esquema():
         )
     ''')
 
+    # tabla q persiste los intentos fallidos de login y el bloqueo temporal.
+    # se guarda en bd (no en memoria) para q el bloqueo aguante reinicios del
+    # servidor; asi un ataque de fuerza bruta no se reinicia con el proceso.
+    # la clave es usuario+ip; bloqueado_hasta es un timestamp unix.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS intentos_login (
+            clave TEXT PRIMARY KEY,
+            intentos INTEGER NOT NULL DEFAULT 0,
+            bloqueado_hasta REAL NOT NULL DEFAULT 0
+        )
+    ''')
+
     conexion.commit()
     conexion.close()
     print("Esquema creado correctamente.")

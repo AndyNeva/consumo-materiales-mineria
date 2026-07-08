@@ -2,14 +2,17 @@ from flask import Flask, render_template, jsonify, request, Response, redirect, 
 import os
 import json
 import logging
+import time
 from dotenv import load_dotenv
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from auth.decoradores import login_required
-from auth.roles import rol_requerido, solo_admin, admin_u_operador  # control por rol (Juan Ruiz)
+from flask_wtf import CSRFProtect
+from flask_wtf.csrf import generate_csrf
+from auth.roles import cualquier_usuario, solo_admin, admin_u_operador
 from auth.login import autenticar
 from auth.usuarios import crear_usuario, listar_usuarios
 from utils.db import conectar, RUTA_BD
+from utils.logging_seguridad import configurar_logging, logger_seguridad
 from services.dashboard import consumo_diario, registros_ultima_semana
 from services.despachos import insertar_despacho, _receta_por_diseno, _calcular_consumos_estimados
 from services.historial import obtener_historial_consumo, cruce_consumo_por_rango
@@ -17,7 +20,6 @@ from services.inventario import obtener_materiales, actualizar_material, agregar
 
 load_dotenv()
 
-# Configuración Flask
 app = Flask(__name__)
 app.config["DATABASE"] = RUTA_BD
 app.secret_key = os.getenv("SECRET_KEY")
@@ -25,19 +27,37 @@ app.secret_key = os.getenv("SECRET_KEY")
 if not app.secret_key:
     raise RuntimeError("SECRET_KEY no definida. Revisa tu archivo .env")
 
-# ===== COOKIES DE SESIÓN SEGURAS =====
+# ===== CSRF PROTECTION =====
+csrf = CSRFProtect(app)
+
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_NAME"] = "ph_session"
-app.config["PERMANENT_SESSION_LIFETIME"] = 3600
 
-# ===== RATE LIMITING =====
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=[],          # sin límite global, solo donde lo apliquemos
+    default_limits=[],
     storage_uri="memory://"
 )
+
+# ===== Logging centralizado =====
+configurar_logging()
+
+# Mensaje genérico reutilizable
+MSG_ERROR_GENERICO = "Ocurrió un error al procesar la solicitud. Intenta de nuevo más tarde."
+# ===== TIMEOUT DE SESIÓN POR INACTIVIDAD =====
+INACTIVIDAD_MAX_SEGUNDOS = 15 * 60  # 15 minutos
+
+@app.before_request
+def verificar_inactividad():
+    if "usuario_id" in session:
+        ahora = time.time()
+        ultima = session.get("ultima_actividad", ahora)
+        if ahora - ultima > INACTIVIDAD_MAX_SEGUNDOS:
+            session.clear()  # sesión vencida por inactividad
+        else:
+            session["ultima_actividad"] = ahora
 
 logging.basicConfig(level=logging.INFO)
 
@@ -60,6 +80,10 @@ def agregar_headers_seguridad(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    rutas_protegidas = ("/dashboard", "/registro", "/inventario", "/historial", "/ml")
+    if request.path in rutas_protegidas or request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 # ===== RUTAS HTML =====
@@ -73,22 +97,22 @@ def login():
     return render_template("login.html")
 
 @app.route("/dashboard")
-@login_required
+@cualquier_usuario
 def dashboard():
     return render_template("dashboard.html")
 
 @app.route("/registro")
-@admin_u_operador          # Operador puede agregar registros (Juan Ruiz)
+@admin_u_operador
 def registro():
     return render_template("registro.html")
 
 @app.route("/inventario")
-@admin_u_operador          # Operador puede ver inventario (Juan Ruiz)
+@admin_u_operador
 def inventario():
     return render_template("inventario.html")
 
 @app.route("/historial")
-@admin_u_operador          # Visualizador no accede al historial (Juan Ruiz)
+@admin_u_operador
 def historial():
     return render_template("historial.html")
 
@@ -131,9 +155,8 @@ def api_usuarios():
 # ===== API DASHBOARD =====
 
 @app.route("/api/dashboard")
-@login_required
+@cualquier_usuario
 def api_dashboard():
-    """Datos del dashboard: consumo diario, registros recientes e inventario"""
     try:
         consumo = consumo_diario(ruta_bd=RUTA_BD)
         registros_semanal, cantidad_registros_semanal = registros_ultima_semana(ruta_bd=RUTA_BD)
@@ -154,16 +177,15 @@ def api_dashboard():
             "inventario": inv,
         }
         return Response(json.dumps(respuesta, ensure_ascii=False), mimetype="application/json")
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /api/dashboard")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
 
 # ===== API RECETAS =====
 
 @app.route("/api/recetas")
-@login_required
+@cualquier_usuario
 def api_recetas():
-    """Lista diseños de mezcla disponibles"""
     try:
         with conectar() as conexion:
             cursor = conexion.cursor()
@@ -171,24 +193,21 @@ def api_recetas():
             filas = cursor.fetchall()
         disenos = [fila["codigo_diseno"] for fila in filas if fila["codigo_diseno"]]
         return jsonify({"ok": True, "disenos": disenos})
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /api/recetas")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
 
 # ===== API DESPACHOS =====
 
 @app.route("/api/despachos", methods=["GET", "POST"])
-@admin_u_operador          # Operador puede agregar registros; Visualizador no (Juan Ruiz)
+@admin_u_operador
 def api_despachos():
-    """Registro de despachos de producción"""
     if request.method == "GET":
         return jsonify({"ok": True, "msg": "Endpoint activo. Usa POST para guardar."})
 
     try:
         datos = request.get_json(force=True) or {}
 
-        # Validación previa para registros de Operador (Juan Ruiz):
-        # antes de confirmar, comprobamos que los datos sean consistentes.
         errores = []
         if not str(datos.get("fecha", "")).strip():
             errores.append("Falta la fecha del despacho.")
@@ -200,6 +219,10 @@ def api_despachos():
         if not str(datos.get("diseno_mezcla", "")).strip():
             errores.append("Falta el diseño de mezcla.")
         if errores:
+            logger_seguridad.info(
+                "Despacho rechazado por validación | usuario=%s ip=%s errores=%s",
+                session.get("username"), request.remote_addr, errores
+            )
             return jsonify({"ok": False, "error": " ".join(errores)}), 400
 
         nuevo_id = insertar_despacho(
@@ -216,17 +239,21 @@ def api_despachos():
         )
         if not nuevo_id:
             return jsonify({"ok": False, "error": "No se pudo insertar el despacho."}), 400
+
+        logger_seguridad.info(
+            "Despacho creado | id=%s usuario=%s ip=%s",
+            nuevo_id, session.get("username"), request.remote_addr
+        )
         return jsonify({"ok": True, "id": nuevo_id})
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /api/despachos")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
 
 # ===== API HISTORIAL =====
 
 @app.route("/api/historial_consumo")
-@login_required
+@admin_u_operador
 def api_historial_consumo():
-    """Historial de consumo con filtros usando SQL puro"""
     inicio = request.args.get("inicio")
     fin = request.args.get("fin")
 
@@ -248,14 +275,14 @@ def api_historial_consumo():
             "total": len(filas),
         }
         return Response(json.dumps(respuesta, ensure_ascii=False), mimetype="application/json")
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /api/historial_consumo")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": MSG_ERROR_GENERICO}), 500
 
 # ===== API MATERIALES =====
 
 @app.route("/api/materiales", methods=["GET", "POST"])
-@admin_u_operador          # ver inventario: Admin u Operador (Juan Ruiz)
+@admin_u_operador
 def api_materiales():
     """Gestión de inventario de materiales.
 
@@ -266,12 +293,15 @@ def api_materiales():
     if request.method == "GET":
         try:
             return jsonify({"ok": True, "materiales": obtener_materiales(ruta_bd=RUTA_BD)})
-        except Exception as e:
+        except Exception:
             logging.exception("Error en GET /api/materiales")
-            return jsonify({"ok": False, "error": str(e)}), 500
+            return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
 
-    # Crear o editar inventario es una acción de administración.
     if session.get("rol") != "Admin":
+        logger_seguridad.warning(
+            "Intento de edición de inventario sin rol Admin | usuario=%s rol=%s ip=%s",
+            session.get("username"), session.get("rol"), request.remote_addr
+        )
         return jsonify({"ok": False, "error": "Solo el Administrador puede crear o editar el inventario"}), 403
 
     try:
@@ -333,6 +363,11 @@ def api_materiales():
         )
         if not actualizado:
             return jsonify({"ok": False, "error": "Material no encontrado"}), 404
+
+        logger_seguridad.info(
+            "Material actualizado | id=%s usuario=%s ip=%s datos=%s",
+            material_id, session.get("username"), request.remote_addr, datos
+        )
         return jsonify({"ok": True, "mensaje": "Material actualizado"})
 
     except ValueError as e:
@@ -348,9 +383,8 @@ def api_materiales():
 # ===== API RESUMEN CONSUMO =====
 
 @app.route("/api/resumen_consumo")
-@login_required
+@admin_u_operador
 def api_resumen_consumo():
-    """Resumen de consumo por rango de fechas"""
     inicio = request.args.get("inicio")
     fin = request.args.get("fin")
 
@@ -369,7 +403,7 @@ def api_resumen_consumo():
         return jsonify({"ok": True, "resumen": resumen, "total_registros": resumen.get("registros", 0)})
     except Exception as e:
         logging.exception("Error en /api/resumen_consumo")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
 
 # ===== API ALERTAS CONSUMO =====
 
@@ -407,9 +441,8 @@ def api_alertas_consumo():
 # ===== API CRUCE CONSUMO VS STOCK =====
 
 @app.route("/api/cruce_consumo_registro", methods=["POST"])
-@login_required
+@admin_u_operador
 def api_cruce_consumo_registro():
-    """Cruce de consumo estimado vs stock para un registro"""
     try:
         datos = request.get_json(force=True)
         if not datos:
@@ -424,25 +457,22 @@ def api_cruce_consumo_registro():
         with conectar(RUTA_BD) as conexion:
             receta = _receta_por_diseno(conexion, diseno)
             if receta is None:
-                return jsonify({"ok": False, "error": f"No existe receta para {diseno}"}), 400
+                return jsonify({"ok": False, "error": "No existe receta para el diseño indicado"}), 400
             consumos = _calcular_consumos_estimados(receta, float(volumen))
 
         salida, no_mapeados, no_encontrados = cruzar_consumo_vs_stock(consumos, ruta_bd=RUTA_BD)
         return jsonify({"ok": True, "datos": salida, "no_mapeados": no_mapeados, "no_encontrados": no_encontrados})
-    except Exception as e:
+    except Exception:
         logging.exception("Error en /api/cruce_consumo_registro")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": MSG_ERROR_GENERICO}), 500
 
-# ===== API LOGIN ===== (Juan Ruiz @eljuandaruiz)
+# ===== API LOGIN =====
 @app.route("/api/login", methods=["POST"])
-@limiter.limit("5 per minute")          # tarea 12 (rate limit general de @AndyNeva)
+@csrf.exempt
+@limiter.limit("5 per minute")
 def api_login():
     """
     Autentica al usuario y abre sesión.
-
-    Complementa el rate limit general con: límite de intentos fallidos +
-    bloqueo temporal, límite de longitud de contraseña, hash con Werkzeug y
-    consultas parametrizadas (ver auth/login.py).
     """
     datos = request.get_json(silent=True) or {}
     username = datos.get("usuario", "")
@@ -452,29 +482,31 @@ def api_login():
     resultado = autenticar(username, password, ip=ip)
 
     if not resultado["ok"]:
-        # 423 (Locked) si está bloqueado por intentos; 401 si solo son credenciales malas.
         codigo = 423 if resultado.get("bloqueado") else 401
         return jsonify({"ok": False, "error": resultado["error"]}), codigo
 
-    # Login correcto: guardamos identidad y rol en la sesión segura de Flask.
     usuario = resultado["usuario"]
     session.clear()
     session["usuario_id"] = usuario["id"]
     session["username"] = usuario["username"]
     session["rol"] = usuario["rol"]
-    session.permanent = True
+    session["ultima_actividad"] = time.time()
 
     return jsonify({"ok": True, "usuario": usuario})
 
 
-# ===== LOGOUT ===== (Juan Ruiz)
+# ===== LOGOUT =====
 @app.route("/logout")
 def logout():
     """Cierra la sesión y vuelve al login."""
+    if "username" in session:
+        logger_seguridad.info(
+            "Logout | usuario=%s ip=%s", session.get("username"), request.remote_addr
+        )
     session.clear()
     return redirect(url_for("login"))
 
 # ===== INICIAR SERVIDOR =====
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG", "False").lower() == "true")

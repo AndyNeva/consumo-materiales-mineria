@@ -1,8 +1,6 @@
 """
 Decoradores para proteger rutas según el rol del usuario.
 
-Responsable: Juan Ruiz (@eljuandaruiz) — módulo de autenticación.
-
 Los 3 perfiles del sistema:
 
   - Admin        : acceso total (ver, agregar, editar, eliminar, gestionar usuarios).
@@ -31,34 +29,32 @@ from __future__ import annotations
 
 from functools import wraps
 from flask import session, request, redirect, url_for, jsonify
+from utils.logging_seguridad import logger_seguridad
 
 # Roles válidos (debe coincidir con auth/login.py).
 ROLES_VALIDOS = ("Admin", "Operador", "Visualizador")
 
 
 def _no_autenticado_response():
-    """Respuesta cuando no hay sesión iniciada."""
+    logger_seguridad.warning(
+        "Acceso sin sesión | ruta=%s ip=%s", request.path, request.remote_addr
+    )
     if request.path.startswith("/api/"):
         return jsonify({"ok": False, "error": "No autenticado"}), 401
     return redirect(url_for("login"))
 
 
 def _sin_permiso_response():
-    """Respuesta cuando el usuario está logueado pero su rol no alcanza."""
+    logger_seguridad.warning(
+        "Acceso denegado por rol | usuario=%s rol=%s ruta=%s ip=%s",
+        session.get("username"), session.get("rol"), request.path, request.remote_addr
+    )
     if request.path.startswith("/api/"):
         return jsonify({"ok": False, "error": "No tienes permiso para esta acción"}), 403
-    # 403 con la página de dashboard básica como destino seguro.
     return redirect(url_for("dashboard"))
 
 
 def rol_requerido(*roles_permitidos: str):
-    """
-    Restringe una ruta a uno o más roles.
-
-    Ejemplo:
-        @rol_requerido("Admin", "Operador")
-        def vista(): ...
-    """
     def decorador(f):
         @wraps(f)
         def envoltura(*args, **kwargs):
@@ -73,18 +69,13 @@ def rol_requerido(*roles_permitidos: str):
     return decorador
 
 
-# Atajos para los casos más comunes ----------------------------------------
-
 def solo_admin(f):
-    """Solo el Administrador puede entrar."""
     return rol_requerido("Admin")(f)
 
 
 def admin_u_operador(f):
-    """Admin u Operador (ver inventario, agregar registros)."""
     return rol_requerido("Admin", "Operador")(f)
 
 
 def cualquier_usuario(f):
-    """Cualquier rol válido autenticado (incluye Visualizador)."""
     return rol_requerido(*ROLES_VALIDOS)(f)
