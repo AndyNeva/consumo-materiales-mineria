@@ -158,6 +158,7 @@ tbody tr:nth-child(even){background:rgba(10,18,35,.6)}
         <a href="/historial" data-ruta="historial">
           <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 6h14M7 12h14M7 18h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M3.5 6h.5M3.5 12h.5M3.5 18h.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
           Historial</a>
+      {% if session.get("rol") == "Admin" %}<a href="/usuarios">Usuarios</a>{% endif %}
       </nav>
 
       <div class="spacer"></div>

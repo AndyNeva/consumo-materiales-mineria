@@ -54,6 +54,7 @@ Este proyecto implementa algoritmos eficientes de búsqueda (BST y AVL), anális
 - **Historial**: `/api/historial_consumo` - Búsquedas con BST/AVL
 - **Registro**: `/api/despachos` - Alta de despachos con validación
 - **Inventario**: `/api/materiales` - Gestión de stock
+- **Usuarios**: `/api/usuarios` - Creación y listado de usuarios solo para Admin
 - **Análisis**: `/api/resumen_consumo` - Agregaciones por rango
 - **Gráficas**: `/api/graficas` - Generación dinámica con Plotly
 - **Machine Learning**: 
@@ -259,9 +260,9 @@ Esto añade la columna `password_hash` (si falta) y crea los usuarios de arranqu
 
 | Usuario | Contraseña | Rol |
 |---------|------------|-----|
-| `admin` | `admin123` | Admin |
-| `operador` | `operador123` | Operador |
-| `visor` | `visor123` | Visualizador |
+| `admin` | `Admin123!` | Admin |
+| `operador` | `Operador123!` | Operador |
+| `visor` | `Visor123!` | Visualizador |
 
 > ⚠️ Cambia estas contraseñas de demostración antes de cualquier uso real.
 

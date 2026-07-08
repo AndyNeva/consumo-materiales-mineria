@@ -211,6 +211,7 @@
         <a href="/registro" data-ruta="registro">Registro diario</a>
         <a href="/inventario" data-ruta="inventario">Inventario</a>
         <a class="active" href="/historial" aria-current="page" data-ruta="historial">Historial</a>
+        {% if session.get("rol") == "Admin" %}<a href="/usuarios">Usuarios</a>{% endif %}
       </nav>
       <div class="spacer"></div>
 

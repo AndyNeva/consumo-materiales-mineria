@@ -30,9 +30,9 @@ from auth.login import hashear_password  # noqa: E402
 # Usuarios iniciales: (username, password, rol).
 # ⚠️ Cambia estas contraseñas en un entorno real. Sirven para arrancar/demostrar.
 USUARIOS_INICIALES = [
-    ("admin", "admin123", "Admin"),
-    ("operador", "operador123", "Operador"),
-    ("visor", "visor123", "Visualizador"),
+    ("admin", "Admin123!", "Admin"),
+    ("operador", "Operador123!", "Operador"),
+    ("visor", "Visor123!", "Visualizador"),
 ]
 
 
