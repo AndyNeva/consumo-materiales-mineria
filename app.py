@@ -331,6 +331,7 @@ def api_historial_consumo():
             wbs=request.args.get("wbs") or None,
             ruta_bd=RUTA_BD,
         )
+        
         filas.sort(key=lambda x: (x.get("fecha", ""), x.get("id", 0)))
         respuesta = {
             "datos": filas,
