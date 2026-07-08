@@ -8,6 +8,7 @@ from flask_limiter.util import get_remote_address
 from auth.decoradores import login_required
 from auth.roles import rol_requerido, solo_admin, admin_u_operador  # control por rol (Juan Ruiz)
 from auth.login import autenticar
+from auth.usuarios import crear_usuario, listar_usuarios
 from utils.db import conectar, RUTA_BD
 from services.dashboard import consumo_diario, registros_ultima_semana
 from services.despachos import insertar_despacho, _receta_por_diseno, _calcular_consumos_estimados
@@ -90,6 +91,42 @@ def inventario():
 @admin_u_operador          # Visualizador no accede al historial (Juan Ruiz)
 def historial():
     return render_template("historial.html")
+
+@app.route("/usuarios")
+@solo_admin
+def usuarios():
+    return render_template("usuarios.html")
+
+# ===== API USUARIOS =====
+
+@app.route("/api/usuarios", methods=["GET", "POST"])
+@solo_admin
+def api_usuarios():
+    """Lista y crea usuarios del sistema. Solo disponible para Admin."""
+    if request.method == "GET":
+        try:
+            return jsonify({"ok": True, "usuarios": listar_usuarios(ruta_bd=RUTA_BD)})
+        except Exception as e:
+            logging.exception("Error en GET /api/usuarios")
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+    try:
+        datos = request.get_json(silent=True) or {}
+        resultado = crear_usuario(
+            username=datos.get("username", ""),
+            password=datos.get("password", ""),
+            rol=datos.get("rol", ""),
+            ruta_bd=RUTA_BD,
+        )
+
+        if not resultado.get("ok"):
+            return jsonify({"ok": False, "error": resultado.get("error", "No se pudo crear el usuario.")}), resultado.get("status", 400)
+
+        return jsonify({"ok": True, "usuario": resultado["usuario"], "mensaje": "Usuario creado correctamente."}), 201
+    except Exception as e:
+        logging.exception("Error en POST /api/usuarios")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 
 # ===== API DASHBOARD =====
 

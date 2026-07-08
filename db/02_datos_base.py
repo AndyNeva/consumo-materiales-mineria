@@ -1,5 +1,9 @@
 import sqlite3
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from auth.login import hashear_password
 
 # Configuración
 
@@ -11,9 +15,21 @@ def cargar_datos_base():
     conexion = sqlite3.connect(DB_PATH)
     cursor = conexion.cursor()
 
-    # Usuario administrador
+    cursor.execute("PRAGMA table_info(usuarios)")
+    columnas_usuarios = [fila[1] for fila in cursor.fetchall()]
+    if "password_hash" not in columnas_usuarios:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN password_hash TEXT")
+
+    # Usuario administrador con contrasena hasheada.
     cursor.execute(
-        "INSERT OR IGNORE INTO usuarios (username, rol) VALUES ('admin', 'Admin')"
+        """
+        INSERT INTO usuarios (username, rol, password_hash)
+        VALUES (?, ?, ?)
+        ON CONFLICT(username) DO UPDATE SET
+            rol = excluded.rol,
+            password_hash = COALESCE(usuarios.password_hash, excluded.password_hash)
+        """,
+        ("admin", "Admin", hashear_password("Admin123!")),
     )
 
     # Materiales base

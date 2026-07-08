@@ -158,6 +158,7 @@
         <a href="/inventario">Inventario</a>
         <a href="/historial">Historial</a>
         <a class="active" href="/graficas" aria-current="page">Gráficas</a>
+        {% if session.get("rol") == "Admin" %}<a href="/usuarios">Usuarios</a>{% endif %}
       </nav>
     </aside>
 

@@ -338,6 +338,16 @@
           </svg>
           Historial
         </a>
+        {% if session.get("rol") == "Admin" %}
+        <a href="/usuarios" id="navUsuarios">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M16 11a4 4 0 1 0-8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M4 21a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M19 4v6M16 7h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          Usuarios
+        </a>
+        {% endif %}
       </nav>
 
       <div class="spacer"></div>

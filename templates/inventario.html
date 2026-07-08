@@ -146,6 +146,7 @@ tbody tr:nth-child(even){background:rgba(10,18,35,.6)}
       <a href="/registro">Registro diario</a>
       <a href="/inventario" class="active">Inventario</a>
       <a href="/historial">Historial</a>
+      {% if session.get("rol") == "Admin" %}<a href="/usuarios">Usuarios</a>{% endif %}
     </nav>
 
     <div class="logout">

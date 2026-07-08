@@ -186,6 +186,7 @@
       <a href="/historial">Historial</a>
       <a href="/graficas">Gráficas</a>
       <a href="/ml" class="active">Predicción ML</a>
+      {% if session.get("rol") == "Admin" %}<a href="/usuarios">Usuarios</a>{% endif %}
     </nav>
 
     <div class="logout">
