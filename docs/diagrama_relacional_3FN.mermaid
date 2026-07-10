@@ -1,63 +1,121 @@
+%% =========================================================================
+%% Diagrama Relacional — 3FN (Tercera Forma Normal)
+%% Proyecto: Consumo de Materiales - Minería
+%% Fuente de verdad: db/01_crear_esquema.py
+%% 
+%% Contiene las 11 tablas reales de la base de datos SQLite:
+%%   1.  usuarios            — usuarios del sistema (autenticación + RBAC)
+%%   2.  intentos_login      — control de intentos fallidos y bloqueo
+%%   3.  Insumos             — catálogo de materiales con stock
+%%   4.  movimientos         — auditoría de cambios de inventario
+%%   5.  Zonas               — catálogo de zonas de despacho
+%%   6.  Centros_Costo       — catálogo de códigos WBS / centros de costo
+%%   7.  Turnos              — catálogo de turnos (Diurno / Nocturno)
+%%   8.  Disenos_Mezcla      — catálogo de diseños de mezcla (receta cabecera)
+%%   9.  Receta_Detalle      — ingredientes de cada diseño (relación N:M)
+%%  10.  Produccion_Diaria   — cabecera de despachos / lotes diarios
+%%  11.  Produccion_Insumos  — consumos reales por despacho (relación N:M)
+%% =========================================================================
+
 erDiagram
 
-PRODUCCION {
-    int produccion_id PK
-    date fecha
-    int numero_lote
-    decimal volumen_m3
-    decimal asentamiento
-    decimal temperatura
-    decimal arena_humedad
+    usuarios {
+        INTEGER id PK
+        TEXT username UK
+        TEXT rol
+        TEXT password_hash
+    }
 
-    int turno_id FK
-    int zona_id FK
-    int wbs_id FK
-    int receta_id FK
-}
+    intentos_login {
+        TEXT clave PK
+        INTEGER intentos
+        REAL bloqueado_hasta
+    }
 
-RECETA {
-    int receta_id PK
-    string nombre_receta
-}
+    Insumos {
+        INTEGER id_insumo PK
+        TEXT nombre_insumo UK
+        TEXT unidad
+        REAL stock_minimo
+        REAL stock_maximo
+        REAL stock_actual
+    }
 
-DETALLE_RECETA {
-    int detalle_id PK
-    int receta_id FK
-    int material_id FK
-    decimal cantidad
-}
+    movimientos {
+        INTEGER id PK
+        INTEGER usuario_id FK
+        INTEGER id_insumo FK
+        REAL cantidad
+        TEXT fecha
+        TEXT tipo
+    }
 
-MATERIAL {
-    int material_id PK
-    string nombre
-    string unidad
+    Zonas {
+        INTEGER id_zona PK
+        TEXT nombre_zona UK
+    }
 
-    decimal stock_minimo
-    decimal stock_maximo
-    decimal stock_actual
-}
+    Centros_Costo {
+        INTEGER id_cc PK
+        TEXT codigo_cc UK
+    }
 
-TURNO {
-    int turno_id PK
-    string nombre
-}
+    Turnos {
+        INTEGER id_turno PK
+        TEXT nombre_turno UK
+    }
 
-ZONA {
-    int zona_id PK
-    string nombre
-}
+    Disenos_Mezcla {
+        TEXT diseno_mezcla PK
+    }
 
-WBS {
-    int wbs_id PK
-    string codigo
-}
+    Receta_Detalle {
+        INTEGER id_receta PK
+        TEXT diseno_mezcla FK
+        INTEGER id_insumo FK
+        REAL cantidad_requerida
+    }
 
-TURNO ||--o{ PRODUCCION : posee
-ZONA ||--o{ PRODUCCION : pertenece
-WBS ||--o{ PRODUCCION : asigna
+    Produccion_Diaria {
+        INTEGER id_produccion PK
+        TEXT fecha
+        TEXT lote_numero
+        REAL volumen_m3
+        TEXT diseno_mezcla FK
+        INTEGER id_zona FK
+        INTEGER id_cc FK
+        REAL arena_humedad_pct
+        REAL asentamiento_final_cm
+        REAL temperatura_c
+        INTEGER id_turno FK
+    }
 
-RECETA ||--o{ PRODUCCION : utiliza
+    Produccion_Insumos {
+        INTEGER id_produccion PK
+        INTEGER id_insumo PK
+        REAL cantidad_real
+    }
 
-RECETA ||--|{ DETALLE_RECETA : contiene
+    %% ---- Relaciones de seguridad / auditoría ----
+    usuarios ||--o{ movimientos : "registra"
+    Insumos  ||--o{ movimientos : "es afectado por"
 
-MATERIAL ||--o{ DETALLE_RECETA : corresponde
+    %% ---- Relaciones de catálogo → producción ----
+    Disenos_Mezcla ||--o{ Produccion_Diaria : "se aplica en"
+    Zonas          ||--o{ Produccion_Diaria : "pertenece a"
+    Centros_Costo  ||--o{ Produccion_Diaria : "se asigna a"
+    Turnos         ||--o{ Produccion_Diaria : "ocurre en"
+
+    %% ---- Relaciones de receta (N:M resuelta) ----
+    Disenos_Mezcla ||--o{ Receta_Detalle : "define"
+    Insumos        ||--o{ Receta_Detalle : "interviene en"
+
+    %% ---- Relaciones de consumo real (N:M resuelta) ----
+    Produccion_Diaria ||--o{ Produccion_Insumos : "consume"
+    Insumos           ||--o{ Produccion_Insumos : "es consumido en"
+
+    %% ---- Relación LÓGICA (no FK física) ----
+    %% intentos_login NO tiene FK a usuarios. Su PK `clave` tiene el
+    %% formato "username@ip" y se asocia lógicamente a usuarios.username.
+    %% No se dibuja como arista ER porque no hay constraint de integridad.
+    %% Ver auth/login.py: función _clave_intentos(username, ip).

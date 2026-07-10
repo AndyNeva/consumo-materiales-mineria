@@ -1,51 +1,71 @@
+%% =========================================================================
+%% Diagrama Relacional — Estado Original (antes de normalizar)
+%% Proyecto: Consumo de Materiales - Minería
+%%
+%% Representa el diseño inicial completamente desnormalizado:
+%%   - Una sola tabla PRODUCCION con todos los datos del despacho
+%%   - Una sola tabla RECETA con TODOS los insumos como columnas
+%%   - Una sola tabla MATERIALES con el stock de cada insumo
+%%
+%% Problemas que motivaron la normalización:
+%%   - Redundancia: la información del turno, zona, WBS y diseño se repetía
+%%     en cada despacho sin control de catálogo
+%%   - Anomalías de actualización: cambiar el nombre de una zona exigía
+%%     actualizar todas las filas de producción
+%%   - Dependencias parciales: los insumos de la receta dependen solo del
+%%     diseño, no del despacho, pero vivían en la misma tabla
+%%   - Sin trazabilidad: no había usuario, auditoría ni control de intentos
+%%     de acceso
+%%
+%% NOTA: Este diagrama es HISTÓRICO. El esquema real implementado está en
+%%       diagrama_relacional_3FN.mermaid
+%% =========================================================================
+
 classDiagram
 
-class PRODUCCION{
-    PK produccion_id
-    fecha
-    numero_lote
-    turno
-    zona
-    wbs
-    diseno
-    fuente_cemento
-    volumen_m3
-    asentamiento
-    temperatura
-    arena_humedad
-    FK receta_id
-}
+    class PRODUCCION {
+        +PK id_produccion
+        +fecha
+        +numero_lote
+        +turno
+        +zona
+        +wbs
+        +diseno
+        +fuente_cemento
+        +volumen_m3
+        +asentamiento
+        +temperatura
+        +arena_humedad
+        +FK receta_id
+    }
 
-class RECETA{
-    PK receta_id
-    nombre_receta
-    diseno
-    unidad_base
-    descripcion
+    class RECETA {
+        +PK receta_id
+        +nombre_receta
+        +diseno
+        +unidad_base
+        +descripcion
+        +arena_kg
+        +grava_kg
+        +cemento_kg
+        +agua_l
+        +glenium_ml
+        +silka_ml
+        +rheo1000_ml
+        +basf719_ml
+        +masterglenium_7950_ml
+        +masterglenium_7970_ml
+        +fibras_kg
+    }
 
-    arena_kg
-    grava_kg
-    cemento_kg
-    agua_l
+    class MATERIALES {
+        +PK id_material
+        +nombre_material
+        +unidad_medida
+        +stock_minimo
+        +stock_maximo
+        +stock_actual
+    }
 
-    glenium_ml
-    silka_ml
-    rheo1000_ml
-    basf719_ml
-    masterglenium_7950_ml
-    masterglenium_7970_ml
-    fibras_kg
-}
-
-class MATERIALES{
-    PK material_id
-    nombre_material
-    unidad_medida
-    stock_minimo
-    stock_maximo
-    stock_actual
-}
-
-RECETA "1" <-- "N" PRODUCCION : utiliza
-
-RECETA "N" --> "M" MATERIALES : contiene
+    PRODUCCION "1" --> "N" RECETA : utiliza
+    RECETA "N" --> "M" MATERIALES : contiene

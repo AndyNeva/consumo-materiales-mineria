@@ -1,490 +1,581 @@
-# 📡 Documentación de APIs - Sistema de Gestión de Materiales
+# Documentación de la API — Consumo de Materiales (Minería)
 
-Esta documentación describe todos los endpoints REST disponibles en el sistema de gestión y predicción de consumo de materiales.
+Esta documentación describe **las 17 rutas HTTP** que expone la aplicación Flask en
+`app.py`: 7 rutas HTML y 10 endpoints JSON bajo `/api/*`. Todas las rutas (excepto
+`/login`, `/api/login` y `/logout`) requieren sesión autenticada y, según el caso, un
+rol específico. Las peticiones `POST` deben incluir el header `X-CSRFToken`.
 
-**URL Base**: `http://localhost:5000`
-
----
-
-## 📋 Índice
-
-### APIs de Datos Generales
-1. [Dashboard](#1-dashboard) - Datos principales del sistema
-2. [Recetas](#2-recetas) - Listado de diseños de mezcla
-
-### APIs de Despachos y Producción
-3. [Registro de Despachos](#3-registro-de-despachos) - Alta de producción
-4. [Historial de Consumo](#4-historial-de-consumo) - Búsqueda con BST/AVL
-5. [Resumen de Consumo](#5-resumen-de-consumo) - Agregaciones por periodo
-
-### APIs de Inventario
-6. [Gestión de Materiales](#6-gestión-de-materiales) - CRUD de inventario
-7. [Cruce Consumo vs Stock](#7-cruce-consumo-vs-stock) - Validación pre-registro
-
-### APIs de Análisis
-8. [Gráficas Dinámicas](#8-gráficas-dinámicas) - Visualizaciones con Plotly
-
-### APIs de Machine Learning
-9. [Información del Modelo](#9-información-del-modelo) - Métricas y detalles
-10. [Predicción Individual](#10-predicción-individual) - Predicción de materiales
-11. [Predicción en Lote](#11-predicción-en-lote) - Múltiples predicciones
+- **Base URL**: `http://localhost:5000`
+- **Content-Type** (POST): `application/json`
+- **Codificación**: UTF-8
+- **Sesión**: cookie `ph_session` (`HttpOnly`, `SameSite=Lax`)
 
 ---
 
-## 1. Dashboard
+## Tabla de contenidos
 
-### `GET /api/dashboard`
+- [Convenciones](#convenciones)
+- [Autenticación y autorización](#autenticación-y-autorización)
+- [Rutas HTML](#rutas-html)
+- [Rutas API](#rutas-api)
+  - [POST /api/login](#post-apilogin)
+  - [GET /api/csrf-token](#get-apicsrf-token)
+  - [GET /api/dashboard](#get-apidashboard)
+  - [GET /api/recetas](#get-apirecetas)
+  - [GET /api/zonas](#get-apizonas)
+  - [GET /api/despachos](#get-apidespachos)
+  - [POST /api/despachos](#post-apidespachos)
+  - [GET /api/historial_consumo](#get-apihistorial_consumo)
+  - [GET /api/resumen_consumo](#get-apiresumen_consumo)
+  - [GET /api/alertas_consumo](#get-apialertas_consumo)
+  - [POST /api/cruce_consumo_registro](#post-apicruce_consumo_registro)
+  - [GET /api/materiales](#get-apimateriales)
+  - [POST /api/materiales](#post-apimateriales)
+  - [GET /api/usuarios](#get-apiusuarios)
+  - [POST /api/usuarios](#post-apiusuarios)
+  - [GET /logout](#get-logout)
+- [Manejo de errores](#manejo-de-errores)
+- [Ejemplos end-to-end](#ejemplos-end-to-end)
 
-Obtiene los datos principales para el dashboard del sistema: consumo diario, registros recientes e inventario.
+---
 
-#### Request
-No requiere parámetros.
+## Convenciones
 
-#### Response Success (200 OK)
+### Estructura de las respuestas JSON
+
+Todas las respuestas exitosas incluyen `"ok": true` y los datos bajo una clave
+descriptiva. Las respuestas de error incluyen `"ok": false` y un campo `"error"` con un
+mensaje en español apto para mostrar al usuario.
+
+```json
+{ "ok": true, "datos": [...] }
+```
+
+```json
+{ "ok": false, "error": "Mensaje de error legible" }
+```
+
+### Códigos HTTP utilizados
+
+| Código | Significado                                                            |
+|--------|------------------------------------------------------------------------|
+| 200    | OK (GET exitoso o POST exitoso sin creación)                           |
+| 201    | Created (POST exitoso que crea un recurso: usuario, material, despacho)|
+| 400    | Bad Request (validación fallida)                                       |
+| 401    | Unauthorized (no autenticado en rutas API protegidas)                  |
+| 403    | Forbidden (rol insuficiente)                                           |
+| 404    | Not Found (material inexistente en actualización)                      |
+| 409    | Conflict (UNIQUE constraint: username o nombre_insumo duplicado)       |
+| 423    | Locked (cuenta bloqueada por intentos fallidos)                        |
+| 429    | Too Many Requests (rate limit en `/api/login`)                         |
+| 500    | Internal Server Error (mensaje genérico, traceback en `seguridad.log`) |
+
+### Cabeceras requeridas
+
+| Header        | Cuándo                                                            |
+|---------------|-------------------------------------------------------------------|
+| `Cookie: ph_session=...` | En todas las rutas autenticadas (lo envía el navegador)|
+| `X-CSRFToken: <token>`   | En todos los `POST` (excepto `/api/login` que está exento)        |
+
+Para obtener un token CSRF fresco: `GET /api/csrf-token`.
+
+---
+
+## Autenticación y autorización
+
+### Roles
+
+| Rol            | Permisos                                                              |
+|----------------|-----------------------------------------------------------------------|
+| `Admin`        | Acceso total: usuarios, inventario, despachos, historial, dashboard.  |
+| `Operador`     | Despachos, historial, dashboard. No usuarios ni inventario.           |
+| `Visualizador` | Solo dashboard, recetas, zonas, alertas (lectura).                    |
+
+### Decoradores aplicados a cada endpoint
+
+| Decorador              | Roles permitidos              |
+|------------------------|-------------------------------|
+| `@solo_admin`          | `Admin`                       |
+| `@admin_u_operador`    | `Admin`, `Operador`           |
+| `@cualquier_usuario`   | `Admin`, `Operador`, `Visualizador` |
+| (sin decorador)        | público                       |
+
+Si una ruta API protegida se invoca sin sesión, el decorador devuelve **401** con
+`{"ok": false, "error": "No has iniciado sesión"}`. Si el rol es insuficiente,
+devuelve **403** con `{"ok": false, "error": "No tienes permisos..."}`.
+
+---
+
+## Rutas HTML
+
+Estas rutas devuelven plantillas Jinja2 renderizadas; no son JSON.
+
+| Ruta          | Método | Decorador          | Plantilla        | Descripción                                     |
+|---------------|--------|--------------------|------------------|-------------------------------------------------|
+| `/`           | GET    | —                  | (redirect)       | Redirige a `/login`                              |
+| `/login`      | GET    | —                  | `login.html`     | Página de inicio de sesión                       |
+| `/dashboard`  | GET    | `@cualquier_usuario` | `dashboard.html` | KPIs y alertas                                  |
+| `/registro`   | GET    | `@admin_u_operador` | `registro.html`  | Formulario de despachos                          |
+| `/inventario` | GET    | `@solo_admin`      | `inventario.html`| Gestión de materiales                            |
+| `/historial`  | GET    | `@admin_u_operador` | `historial.html` | Búsqueda filtrable                              |
+| `/usuarios`   | GET    | `@solo_admin`      | `usuarios.html`  | Gestión de usuarios (inyecta `csrf_token`)       |
+
+Si el usuario no autenticado accede a una ruta HTML protegida, es redirigido a
+`/login`. Si está autenticado pero sin rol suficiente, es redirigido a `/dashboard`.
+
+---
+
+## Rutas API
+
+### POST /api/login
+
+Autentica al usuario contra la tabla `usuarios` (hash Werkzeug `pbkdf2:sha256`) y abre
+sesión Flask.
+
+- **Decoradores**: `@csrf.exempt`, `@limiter.limit("5 per minute")`
+- **Rate limit**: 5 peticiones por minuto por IP. Excederlo devuelve `429`.
+- **Bloqueo anti-fuerza-bruta**: tras 5 intentos fallidos para el mismo
+  `username@ip`, la cuenta se bloquea 24 horas (persistente en `intentos_login`).
+- **Body**:
+
 ```json
 {
-  "consumo_diario": 125.5,
-  "registros_ultima_semana": [
-    {
-      "fecha": "2026-01-12",
-      "diseno_mezcla": "H-210-45-19-G",
-      "zona": "Zona Norte",
-      "wbs": "WBS-001",
-      "volumen_m3": 15.5
-    }
-  ],
-  "cantidad_registros_semana": 42,
-  "inventario": [
-    {
-      "material": "Cemento",
-      "unidad": "Kg",
-      "stock": 50000,
-      "minimo": 10000
-    },
-    {
-      "material": "Arena",
-      "unidad": "Kg",
-      "stock": 4500,
-      "minimo": 5000
-    }
-  ]
+  "usuario": "admin",
+  "password": "Admin123!"
 }
 ```
 
-#### Ejemplo con cURL
-```bash
-curl -X GET http://localhost:5000/api/dashboard
-```
+- **Respuesta 200** (éxito):
 
-#### Ejemplo con Python
-```python
-import requests
-response = requests.get('http://localhost:5000/api/dashboard')
-data = response.json()
-print(f"Consumo hoy: {data['consumo_diario']} m³")
-```
-
----
-
-## 2. Recetas
-
-### `GET /api/recetas`
-
-Obtiene la lista de diseños de mezcla disponibles en el sistema.
-
-#### Request
-No requiere parámetros.
-
-#### Response Success (200 OK)
 ```json
 {
   "ok": true,
-  "disenos": [
-    "H-210-45-19-G",
-    "H-280-45-19-G",
-    "H-350-45-19-G",
-    "H-175-45-19-G"
-  ]
-}
-```
-
-#### Ejemplo con cURL
-```bash
-curl -X GET http://localhost:5000/api/recetas
-```
-
----
-
-## 3. Registro de Despachos
-
-### `POST /api/despachos`
-
-Registra un nuevo despacho de producción y actualiza automáticamente el inventario de materiales.
-
-#### Request Body
-```json
-{
-  "fecha": "2026-01-23",
-  "volumen_m3": 6.5,
-  "diseno_mezcla": "H-210-45-19-G",
-  "zona": "Zona Norte",
-  "wbs": "WBS-001",
-  "turno": "Diurno",
-  "arena_humedad_pct": 3.5,
-  "asentamiento_final_cm": 18.0,
-  "temperatura_c": 25.0
-}
-```
-
-#### Campos del Request
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `fecha` | string | Sí | Fecha del despacho (YYYY-MM-DD) |
-| `volumen_m3` | number | Sí | Volumen producido en m³ |
-| `diseno_mezcla` | string | Sí | Código del diseño de mezcla |
-| `zona` | string | Sí | Zona de destino |
-| `wbs` | string | Sí | Código WBS del proyecto |
-| `turno` | string | Sí | Turno de producción (Diurno/Nocturno) |
-| `arena_humedad_pct` | number | Sí | Humedad de arena en % (0-100) |
-| `asentamiento_final_cm` | number | Sí | Asentamiento en cm (≥0) |
-| `temperatura_c` | number | Sí | Temperatura en °C |
-
-#### Response Success (200 OK)
-```json
-{
-  "ok": true,
-  "id": 1234
-}
-```
-
-#### Response Error (400 Bad Request)
-```json
-{
-  "ok": false,
-  "error": "No se pudo insertar el despacho (revisa validaciones/receta/BD)."
-}
-```
-
-#### Validaciones Automáticas
-- ✅ Verifica que exista la receta del diseño de mezcla
-- ✅ Calcula consumos automáticamente según receta
-- ✅ Descuenta stock de materiales del inventario
-- ✅ Valida volumen > 0
-
-#### Ejemplo con cURL
-```bash
-curl -X POST http://localhost:5000/api/despachos \
-  -H "Content-Type: application/json" \
-  -d '{
-    "fecha": "2026-01-23",
-    "volumen_m3": 6.5,
-    "diseno_mezcla": "H-210-45-19-G",
-    "zona": "Zona Norte",
-    "wbs": "WBS-001",
-    "turno": "Diurno",
-    "arena_humedad_pct": 3.5,
-    "asentamiento_final_cm": 18.0,
-    "temperatura_c": 25.0
-  }'
-```
-
-#### Ejemplo con Python
-```python
-import requests
-
-despacho = {
-    "fecha": "2026-01-23",
-    "volumen_m3": 6.5,
-    "diseno_mezcla": "H-210-45-19-G",
-    "zona": "Zona Norte",
-    "wbs": "WBS-001",
-    "turno": "Diurno",
-    "arena_humedad_pct": 3.5,
-    "asentamiento_final_cm": 18.0,
-    "temperatura_c": 25.0
-}
-
-response = requests.post('http://localhost:5000/api/despachos', json=despacho)
-if response.json()['ok']:
-    print(f"Despacho registrado con ID: {response.json()['id']}")
-```
-
----
-
-## 4. Historial de Consumo
-
-### `GET /api/historial_consumo`
-
-Obtiene el historial de despachos utilizando **estructuras de datos BST y AVL** para búsquedas eficientes. Retorna tiempos de ejecución de ambos algoritmos para comparación.
-
-#### Request Parameters
-
-| Parámetro | Tipo | Requerido | Descripción |
-|-----------|------|-----------|-------------|
-| `inicio` | string | **Sí** | Fecha inicial (YYYY-MM-DD) |
-| `fin` | string | **Sí** | Fecha final (YYYY-MM-DD) |
-| `diseno` | string | No | Filtro por diseño de mezcla |
-| `zona` | string | No | Filtro por zona (búsqueda parcial) |
-| `turno` | string | No | Filtro por turno |
-| `wbs` | string | No | Filtro por WBS (búsqueda parcial) |
-
-#### Response Success (200 OK)
-```json
-{
-  "datos": [
-    {
-      "id": 1,
-      "fecha": "2025-06-15",
-      "diseno": "H-210-45-19-G",
-      "zona": "Zona Norte",
-      "wbs": "WBS-001",
-      "turno": "Diurno",
-      "volumen_m3": 15.5,
-      "arena_kg": 12400.0,
-      "grava_kg": 13950.0,
-      "cemento_kg": 5425.0,
-      "agua_kg": 2712.5,
-      "aditivo_rheo_sika115": 0.0,
-      "aditivo_basf_sika200": 15.5,
-      "aditivo_delvo": 0.0,
-      "aditivo_glenium_7950": 0.0,
-      "aditivo_glenium_7970": 0.0,
-      "aditivo_fibras": 0.0,
-      "arena_humedad_pct": 3.5,
-      "asentamiento_final_cm": 18.0,
-      "temperatura_c": 25.0
-    }
-  ],
-  "tiempos": {
-    "bst": 0.002345,
-    "avl": 0.001876
-  },
-  "total": 150
-}
-```
-
-#### Response Error (400 Bad Request)
-```json
-{
-  "error": "Debes enviar 'inicio' y 'fin'."
-}
-```
-
-#### Características Especiales
-- 🌲 **Búsqueda con BST**: Árbol binario de búsqueda simple
-- 🌲 **Búsqueda con AVL**: Árbol auto-balanceado (más eficiente)
-- ⚡ **Comparación de rendimiento**: Retorna tiempos de ejecución
-- 🔍 **Filtros combinados**: Permite múltiples filtros simultáneos
-
-#### Ejemplo con cURL
-```bash
-# Búsqueda simple por rango
-curl -X GET "http://localhost:5000/api/historial_consumo?inicio=2025-01-01&fin=2025-12-31"
-
-# Búsqueda con filtros
-curl -X GET "http://localhost:5000/api/historial_consumo?inicio=2025-01-01&fin=2025-12-31&diseno=H-210-45-19-G&zona=Norte&turno=Diurno"
-```
-
-#### Ejemplo con Python
-```python
-import requests
-
-params = {
-    "inicio": "2025-01-01",
-    "fin": "2025-12-31",
-    "diseno": "H-210-45-19-G",
-    "zona": "Norte"
-}
-
-response = requests.get('http://localhost:5000/api/historial_consumo', params=params)
-data = response.json()
-
-print(f"Total de registros: {data['total']}")
-print(f"Tiempo BST: {data['tiempos']['bst']*1000:.2f} ms")
-print(f"Tiempo AVL: {data['tiempos']['avl']*1000:.2f} ms")
-print(f"AVL es {data['tiempos']['bst']/data['tiempos']['avl']:.2f}x más rápido")
-```
-
----
-
-## 5. Resumen de Consumo
-
-### `GET /api/resumen_consumo`
-
-Obtiene totales agregados de consumo de materiales en un rango de fechas, con filtros opcionales.
-
-#### Request Parameters
-
-| Parámetro | Tipo | Requerido | Descripción |
-|-----------|------|-----------|-------------|
-| `inicio` | string | **Sí** | Fecha inicial (YYYY-MM-DD) |
-| `fin` | string | **Sí** | Fecha final (YYYY-MM-DD) |
-| `diseno` | string | No | Filtro por diseño |
-| `zona` | string | No | Filtro por zona |
-| `turno` | string | No | Filtro por turno |
-| `wbs` | string | No | Filtro por WBS |
-
-#### Response Success (200 OK)
-```json
-{
-  "ok": true,
-  "resumen": {
-    "registros": 150,
-    "volumen_m3": 975.0,
-    "arena_kg": 780000.0,
-    "grava_kg": 877500.0,
-    "cemento_kg": 341250.0,
-    "agua_kg": 170625.0,
-    "aditivo_rheo_sika115": 0.0,
-    "aditivo_basf_sika200": 975.0,
-    "aditivo_delvo": 0.0,
-    "aditivo_glenium_7950": 0.0,
-    "aditivo_glenium_7970": 0.0,
-    "aditivo_fibras": 0.0
+  "usuario": {
+    "id": 1,
+    "username": "admin",
+    "rol": "Admin"
   }
 }
 ```
 
-#### Ejemplo con cURL
+La respuesta setea la cookie `ph_session` y la sesión queda con `usuario_id`,
+`username`, `rol` y `ultima_actividad`.
+
+- **Respuesta 401** (credenciales inválidas):
+
+```json
+{ "ok": false, "error": "Usuario o contraseña incorrectos" }
+```
+
+- **Respuesta 423** (cuenta bloqueada):
+
+```json
+{
+  "ok": false,
+  "error": "Cuenta bloqueada. Intenta de nuevo en 86382 segundos.",
+  "bloqueado": true
+}
+```
+
+- **Ejemplo cURL**:
+
 ```bash
-curl -X GET "http://localhost:5000/api/resumen_consumo?inicio=2025-01-01&fin=2025-12-31&diseno=H-210-45-19-G"
+curl -c cookies.txt -X POST http://localhost:5000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"usuario": "admin", "password": "Admin123!"}'
 ```
 
 ---
 
-## 6. Gestión de Materiales
+### GET /api/csrf-token
 
-### `GET /api/materiales`
+Devuelve un token CSRF fresco para usar en los POST.
 
-Obtiene la lista completa de materiales con su inventario actual.
+- **Decorador**: `@cualquier_usuario`
+- **Respuesta 200**:
 
-#### Response Success (200 OK)
+```json
+{ "csrf_token": "IjQ3N2QxN..." }
+```
+
+- **Uso típico**: el frontend llama este endpoint antes de cualquier POST y envía el
+  token en el header `X-CSRFToken`.
+
+---
+
+### GET /api/dashboard
+
+KPIs para el dashboard: producción diaria (m³), registros de los últimos 7 días e
+inventario actual mapeado al formato que espera el frontend.
+
+- **Decorador**: `@cualquier_usuario`
+- **Parámetros**: ninguno
+- **Respuesta 200**:
+
 ```json
 {
-  "ok": true,
-  "materiales": [
+  "consumo_diario": {
+    "fecha": "2025-07-08",
+    "total_m3": 142.5,
+    "cantidad_despachos": 7
+  },
+  "registros_ultima_semana": [
     {
-      "id": 1,
-      "nombre": "Cemento",
-      "unidad": "Kg",
-      "stock_actual": 50000.0,
-      "stock_minimo": 10000.0,
-      "stock_maximo": 100000.0
-    },
+      "id_produccion": 123,
+      "fecha": "2025-07-08",
+      "diseno_mezcla": "UCEM-HE",
+      "volumen_m3": 24.0,
+      "nombre_zona": "ZONA_NORTE",
+      "codigo_cc": "WBS-001"
+    }
+  ],
+  "cantidad_registros_semana": 35,
+  "inventario": [
     {
-      "id": 2,
-      "nombre": "Arena",
-      "unidad": "Kg",
-      "stock_actual": 4500.0,
-      "stock_minimo": 5000.0,
-      "stock_maximo": 50000.0
+      "material": "Cemento",
+      "unidad": "kg",
+      "stock": 8500.0,
+      "minimo": 2000.0
     }
   ]
 }
 ```
 
-### `POST /api/materiales`
+> El campo `inventario` proviene de `obtener_materiales()` re-mapeado a las claves
+> `material`, `unidad`, `stock`, `minimo` (alias legado del frontend original).
 
-Actualiza el stock de un material existente.
+- **Ejemplo cURL**:
 
-#### Request Body
-```json
-{
-  "id": 1,
-  "stock_actual": 55000.0,
-  "stock_minimo": 12000.0
-}
-```
-
-#### Campos del Request
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `id` | number | **Sí** | ID del material |
-| `stock_actual` | number | No | Nuevo stock actual |
-| `stock_minimo` | number | No | Nuevo stock mínimo |
-
-#### Response Success (200 OK)
-```json
-{
-  "ok": true,
-  "mensaje": "Material actualizado"
-}
-```
-
-#### Response Error (404 Not Found)
-```json
-{
-  "ok": false,
-  "error": "Material no encontrado"
-}
-```
-
-#### Ejemplo con Python
-```python
-import requests
-
-# Obtener lista de materiales
-response = requests.get('http://localhost:5000/api/materiales')
-materiales = response.json()['materiales']
-
-# Actualizar stock de cemento
-actualizar = {
-    "id": 1,
-    "stock_actual": 55000.0,
-    "stock_minimo": 12000.0
-}
-response = requests.post('http://localhost:5000/api/materiales', json=actualizar)
+```bash
+curl -b cookies.txt http://localhost:5000/api/dashboard
 ```
 
 ---
 
-## 7. Cruce Consumo vs Stock
+### GET /api/recetas
 
-### `POST /api/cruce_consumo_registro`
+Lista los códigos de diseño de mezcla disponibles (catálogo `Disenos_Mezcla`).
 
-Calcula el cruce entre consumo estimado y stock disponible para validar si es posible realizar un despacho **sin registrarlo**.
+- **Decorador**: `@cualquier_usuario`
+- **Respuesta 200**:
 
-#### Request Body
 ```json
 {
-  "diseno_mezcla": "H-210-45-19-G",
-  "volumen_m3": 6.5
+  "ok": true,
+  "disenos": ["UCEM-HE", "UCEM-OPC", "SHOTCRETE-1"]
 }
 ```
 
-#### Campos del Request
+---
 
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `diseno_mezcla` | string | **Sí** | Código del diseño |
-| `volumen_m3` | number | **Sí** | Volumen a producir |
+### GET /api/zonas
 
-#### Response Success (200 OK)
+Lista los nombres de zona disponibles (catálogo `Zonas`).
+
+- **Decorador**: `@cualquier_usuario`
+- **Respuesta 200**:
+
+```json
+{
+  "ok": true,
+  "zonas": ["ZONA_NORTE", "ZONA_SUR", "ZONA_PLANTA"]
+}
+```
+
+---
+
+### GET /api/despachos
+
+Endpoint de verificación (stub). Confirma que la ruta está activa.
+
+- **Decorador**: `@admin_u_operador`
+- **Respuesta 200**:
+
+```json
+{ "ok": true, "msg": "Endpoint activo. Usa POST para guardar." }
+```
+
+---
+
+### POST /api/despachos
+
+Crea un despacho (lote de producción) y descuenta stock de los insumos consumidos.
+
+- **Decorador**: `@admin_u_operador`
+- **Header requerido**: `X-CSRFToken`
+- **Body** (todos los campos son obligatorios salvo los marcados):
+
+```json
+{
+  "fecha": "2025-07-08",                   // YYYY-MM-DD (obligatorio)
+  "volumen_m3": "24.5",                    // > 0 (obligatorio, admite coma decimal)
+  "diseno_mezcla": "UCEM-HE",              // debe existir en Disenos_Mezcla (obligatorio)
+  "turno": "Diurno",                       // "Diurno" o "Nocturno" (obligatorio)
+  "wbs": "WBS-001",                        // código de centro de costo (obligatorio)
+  "zona": "ZONA_NORTE",                    // nombre de zona (obligatorio)
+  "arena_humedad_pct": "6.5",              // 4 a 10 (opcional)
+  "asentamiento_final_cm": "22",           // 15 a 30 (opcional)
+  "temperatura_c": "18"                    // -10 a 50 (opcional)
+}
+```
+
+**Validaciones**:
+
+- `fecha` debe ser ISO `YYYY-MM-DD` válido.
+- `volumen_m3` debe ser > 0 y convertible a float (admite coma decimal).
+- `diseno_mezcla`, `turno`, `wbs`, `zona` no vacíos.
+- `arena_humedad_pct` entre 4 y 10 (si viene).
+- `asentamiento_final_cm` entre 15 y 30 (si viene).
+- `temperatura_c` entre -10 y 50 (si viene).
+
+**Efectos secundarios**:
+
+1. Inserta una fila en `Produccion_Diaria` (mapeando "Diurno"→`id_turno=1`,
+   "Nocturno"→`id_turno=2`).
+2. Obtiene o crea las FKs de `Zonas`, `Centros_Costo` y `Disenos_Mezcla` si no existen
+   (upsert idempotente).
+3. Lee la receta (`Receta_Detalle`) para el diseño, calcula el consumo estimado por
+   insumo multiplicando `cantidad_requerida` × `volumen_m3`.
+4. Para cada insumo: inserta una fila en `Produccion_Insumos`, descuenta
+   `stock_actual` en `Insumos` y registra un movimiento `EGRESO` en `movimientos`
+   con el `usuario_id` de la sesión.
+5. Registra en `seguridad.log`: `"Despacho creado | id=X usuario=Y ip=Z"`.
+
+- **Respuesta 201**:
+
+```json
+{ "ok": true, "id": 124 }
+```
+
+- **Respuesta 400** (validación):
+
+```json
+{ "ok": false, "error": "El volumen_m3 debe ser mayor que 0. Fecha inválida..." }
+```
+
+- **Respuesta 500** (error inesperado):
+
+```json
+{ "ok": false, "error": "Ocurrió un error al procesar la solicitud. Intenta de nuevo más tarde." }
+```
+
+- **Ejemplo cURL**:
+
+```bash
+# 1. Obtener token CSRF
+TOKEN=$(curl -b cookies.txt -s http://localhost:5000/api/csrf-token | python -c "import sys, json; print(json.load(sys.stdin)['csrf_token'])")
+
+# 2. Crear despacho
+curl -b cookies.txt -X POST http://localhost:5000/api/despachos \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{
+    "fecha": "2025-07-08",
+    "volumen_m3": "24.5",
+    "diseno_mezcla": "UCEM-HE",
+    "turno": "Diurno",
+    "wbs": "WBS-001",
+    "zona": "ZONA_NORTE",
+    "arena_humedad_pct": "6.5",
+    "asentamiento_final_cm": "22",
+    "temperatura_c": "18"
+  }'
+```
+
+---
+
+### GET /api/historial_consumo
+
+Lista despachos filtrados por rango de fechas y opcionalmente por diseño, zona, turno y
+WBS. Devuelve filas pivoteadas (una columna por insumo) para que el frontend las
+renderice como tabla ancha.
+
+- **Decorador**: `@admin_u_operador`
+- **Query params** (todos viajan en la URL):
+
+| Param     | Requerido | Descripción                                  |
+|-----------|-----------|----------------------------------------------|
+| `inicio`  | sí        | Fecha inicial `YYYY-MM-DD`                   |
+| `fin`     | sí        | Fecha final `YYYY-MM-DD`                     |
+| `diseno`  | no        | Filtra por `diseno_mezcla`                   |
+| `zona`    | no        | Filtra por `nombre_zona`                     |
+| `turno`   | no        | Filtra por `nombre_turno` (Diurno/Nocturno)  |
+| `wbs`     | no        | Filtra por `codigo_cc`                       |
+
+- **Respuesta 200**:
+
+```json
+{
+  "datos": [
+    {
+      "id": 124,
+      "fecha": "2025-07-08",
+      "diseno_mezcla": "UCEM-HE",
+      "nombre_zona": "ZONA_NORTE",
+      "codigo_cc": "WBS-001",
+      "nombre_turno": "Diurno",
+      "volumen_m3": 24.5,
+      "arena_humedad_pct": 6.5,
+      "asentamiento_final_cm": 22.0,
+      "temperatura_c": 18.0,
+      "cemento_kg": 2448.0,
+      "arena_kg": 18000.0,
+      "grava_kg": 22000.0,
+      "agua_kg": 4500.0,
+      "aditivo_rheo_sika115": 12.5,
+      "aditivo_basf_sika200": 0.0,
+      "aditivo_delvo": 0.0,
+      "aditivo_glenium_7950": 8.0,
+      "aditivo_glenium_7970": 0.0,
+      "aditivo_fibras": 0.0
+    }
+  ],
+  "total": 1
+}
+```
+
+Las filas se ordenan por `fecha` ASC y luego `id` ASC.
+
+- **Respuesta 400** (sin `inicio` o `fin`):
+
+```json
+{ "error": "Debes enviar 'inicio' y 'fin'." }
+```
+
+- **Ejemplo cURL**:
+
+```bash
+curl -b cookies.txt "http://localhost:5000/api/historial_consumo?inicio=2025-07-01&fin=2025-07-08"
+```
+
+---
+
+### GET /api/resumen_consumo
+
+Agregados de consumo en el rango filtrado (suma por insumo + total de m³ + número de
+registros). Reutiliza los mismos filtros que `/api/historial_consumo`.
+
+- **Decorador**: `@admin_u_operador`
+- **Query params**: igual que `/api/historial_consumo` (`inicio` y `fin` obligatorios).
+- **Respuesta 200**:
+
+```json
+{
+  "ok": true,
+  "resumen": {
+    "registros": 35,
+    "volumen_m3": 842.5,
+    "cemento_kg": 84000.0,
+    "arena_kg": 612000.0,
+    "grava_kg": 748000.0,
+    "agua_kg": 153000.0,
+    "aditivo_rheo_sika115": 430.0,
+    "aditivo_basf_sika200": 0.0,
+    "aditivo_delvo": 0.0,
+    "aditivo_glenium_7950": 280.0,
+    "aditivo_glenium_7970": 0.0,
+    "aditivo_fibras": 0.0
+  },
+  "total_registros": 35
+}
+```
+
+- **Ejemplo cURL**:
+
+```bash
+curl -b cookies.txt "http://localhost:5000/api/resumen_consumo?inicio=2025-07-01&fin=2025-07-08&zona=ZONA_NORTE"
+```
+
+---
+
+### GET /api/alertas_consumo
+
+Cruza el consumo filtrado del historial contra el stock actual. Marca cada insumo como
+`OK`, `Bajo mínimo` o `Déficit`.
+
+- **Decorador**: `@cualquier_usuario` (lectura)
+- **Query params**: igual que `/api/historial_consumo` (`inicio` y `fin` obligatorios).
+- **Respuesta 200**:
+
+```json
+{
+  "ok": true,
+  "filas": [
+    {
+      "campo": "cemento_kg",
+      "material": "Cemento",
+      "unidad": "kg",
+      "stock": 8500.0,
+      "consumo": 84000.0,
+      "saldo": -75500.0,
+      "deficit_sugerido": 75500.0,
+      "bajo_minimo": true,
+      "estado": "Déficit"
+    },
+    {
+      "campo": "arena_kg",
+      "material": "Arena",
+      "unidad": "kg",
+      "stock": 800000.0,
+      "consumo": 612000.0,
+      "saldo": 188000.0,
+      "deficit_sugerido": 0.0,
+      "bajo_minimo": false,
+      "estado": "OK"
+    }
+  ],
+  "no_mapeados": [],
+  "no_encontrados": [],
+  "total_registros": 35
+}
+```
+
+- `no_mapeados`: campos de consumo que no tienen un nombre de insumo asociado en el
+  mapeo interno (defensa contra cambios de esquema).
+- `no_encontrados`: insumos cuyo nombre no existe en la tabla `Insumos`.
+
+- **Ejemplo cURL**:
+
+```bash
+curl -b cookies.txt "http://localhost:5000/api/alertas_consumo?inicio=2025-07-01&fin=2025-07-08"
+```
+
+---
+
+### POST /api/cruce_consumo_registro
+
+Valida un despacho **individual** antes de guardarlo. Calcula el consumo estimado para
+el `volumen_m3` indicado según la receta del `diseno_mezcla`, y lo cruza contra el stock
+actual. El frontend usa esto para habilitar/deshabilitar el botón "Guardar registro".
+
+- **Decorador**: `@admin_u_operador`
+- **Header requerido**: `X-CSRFToken`
+- **Body**:
+
+```json
+{
+  "fecha": "2025-07-08",         // YYYY-MM-DD (obligatorio)
+  "diseno_mezcla": "UCEM-HE",    // obligatorio
+  "volumen_m3": "24.5"           // > 0 (obligatorio, admite coma decimal)
+}
+```
+
+- **Respuesta 200**:
+
 ```json
 {
   "ok": true,
   "datos": [
     {
+      "campo": "cemento_kg",
       "material": "Cemento",
       "unidad": "kg",
-      "stock_actual": 50000.0,
-      "minimo": 10000.0,
-      "consumo_estimado": 2275.0,
-      "saldo": 47725.0,
+      "stock": 8500.0,
+      "consumo": 2448.0,
+      "saldo": 6052.0,
+      "deficit_sugerido": 0.0,
       "bajo_minimo": false,
       "estado": "OK"
-    },
-    {
-      "material": "Arena",
-      "unidad": "kg",
-      "stock_actual": 4500.0,
-      "minimo": 5000.0,
-      "consumo_estimado": 5200.0,
-      "saldo": -700.0,
-      "bajo_minimo": true,
-      "estado": "Deficit"
     }
   ],
   "no_mapeados": [],
@@ -492,538 +583,340 @@ Calcula el cruce entre consumo estimado y stock disponible para validar si es po
 }
 ```
 
-#### Estados Posibles
+- **Respuesta 400** (falta diseño o volumen):
 
-| Estado | Descripción |
-|--------|-------------|
-| `"OK"` | Stock suficiente y por encima del mínimo |
-| `"Bajo minimo"` | Stock suficiente pero por debajo del mínimo |
-| `"Deficit"` | Stock insuficiente (saldo negativo) |
-
-#### Ejemplo con cURL
-```bash
-curl -X POST http://localhost:5000/api/cruce_consumo_registro \
-  -H "Content-Type: application/json" \
-  -d '{"diseno_mezcla": "H-210-45-19-G", "volumen_m3": 6.5}'
+```json
+{ "ok": false, "error": "Faltan diseno_mezcla o volumen" }
 ```
 
-#### Ejemplo con Python
-```python
-import requests
+- **Ejemplo cURL**:
 
-datos = {
-    "diseno_mezcla": "H-210-45-19-G",
-    "volumen_m3": 6.5
-}
-
-response = requests.post('http://localhost:5000/api/cruce_consumo_registro', json=datos)
-cruce = response.json()['datos']
-
-for material in cruce:
-    if material['estado'] == 'Deficit':
-        print(f"⚠️ {material['material']}: Falta {abs(material['saldo']):.2f} {material['unidad']}")
-    elif material['estado'] == 'Bajo minimo':
-        print(f"⚡ {material['material']}: Stock bajo mínimo")
-    else:
-        print(f"✅ {material['material']}: OK")
+```bash
+curl -b cookies.txt -X POST http://localhost:5000/api/cruce_consumo_registro \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{"fecha": "2025-07-08", "diseno_mezcla": "UCEM-HE", "volumen_m3": "24.5"}'
 ```
 
 ---
 
-## 8. Gráficas Dinámicas
+### GET /api/materiales
 
-### `GET /api/graficas`
+Lista todos los insumos del inventario.
 
-Genera gráficas interactivas con Plotly basadas en los datos filtrados.
+- **Decorador**: `@solo_admin`
+- **Respuesta 200**:
 
-#### Request Parameters
-
-| Parámetro | Tipo | Requerido | Descripción |
-|-----------|------|-----------|-------------|
-| `inicio` | string | **Sí** | Fecha inicial (YYYY-MM-DD) |
-| `fin` | string | **Sí** | Fecha final (YYYY-MM-DD) |
-| `diseno` | string | No | Filtro por diseño |
-| `zona` | string | No | Filtro por zona |
-| `turno` | string | No | Filtro por turno |
-| `wbs` | string | No | Filtro por WBS |
-
-#### Response Success (200 OK)
 ```json
 {
   "ok": true,
-  "graficas": [
+  "materiales": [
     {
-      "nombre": "volumen_por_dia",
-      "figura": {
-        "data": [...],
-        "layout": {...}
-      }
-    },
-    {
-      "nombre": "volumen_por_diseno",
-      "figura": {
-        "data": [...],
-        "layout": {...}
-      }
-    },
-    {
-      "nombre": "boxplot_materiales",
-      "figura": {
-        "data": [...],
-        "layout": {...}
-      }
-    }
-  ],
-  "num_registros": 150
-}
-```
-
-#### Tipos de Gráficas Disponibles
-
-| Nombre | Descripción |
-|--------|-------------|
-| `volumen_por_dia` | Barras de volumen diario |
-| `volumen_por_diseno` | Barras de volumen por diseño |
-| `hist_volumen` | Histograma de distribución de volumen |
-| `hist_aditivos` | Histograma de aditivos |
-| `frecuencia_diseno` | Frecuencia de diseños utilizados |
-| `boxplot_materiales` | Boxplot de materiales principales |
-| `boxplot_aditivos` | Boxplot de aditivos |
-| `corr_materiales` | Heatmap de correlación de materiales |
-| `corr_aditivos` | Heatmap de correlación de aditivos |
-
-#### Ejemplo con cURL
-```bash
-curl -X GET "http://localhost:5000/api/graficas?inicio=2025-01-01&fin=2025-12-31"
-```
-
-#### Ejemplo con Python
-```python
-import requests
-import plotly.graph_objects as go
-
-response = requests.get('http://localhost:5000/api/graficas', params={
-    "inicio": "2025-01-01",
-    "fin": "2025-12-31"
-})
-
-graficas = response.json()['graficas']
-
-# Renderizar primera gráfica
-primera = graficas[0]
-fig = go.Figure(primera['figura'])
-fig.show()
-```
-
----
-
-## 9. Información del Modelo
-
-### `GET /api/ml/info`
-
-Obtiene información detallada del modelo de Machine Learning entrenado.
-
-#### Response Success (200 OK)
-```json
-{
-  "modelo_tipo": "XGBoost",
-  "fecha_entrenamiento": "2026-01-15",
-  "metricas_globales": {
-    "r2_test": 0.9456,
-    "rmse_test": 125.34,
-    "mae_test": 89.67,
-    "mse_train": 8234.56,
-    "mse_test": 15710.27
-  },
-  "metricas_por_material": {
-    "Arena (kg)": {
-      "r2": 0.9523,
-      "mae": 78.45,
-      "rmse": 112.34,
-      "mape": 5.67
-    },
-    "Grava (kg)": {
-      "r2": 0.9412,
-      "mae": 92.34,
-      "rmse": 128.67,
-      "mape": 6.12
-    },
-    "Cemento (kg)": {
-      "r2": 0.9434,
-      "mae": 45.23,
-      "rmse": 89.56,
-      "mape": 4.89
-    }
-  },
-  "variables_predictoras": [
-    "FECHA_NUMERICO",
-    "FECHA_NUMERICO_SQ",
-    "FECHA_NUMERICO_CU",
-    "MES_SIN",
-    "MES_COS",
-    "TURNO_BIN",
-    "Volumen (m3)",
-    "DISENO_H-210-45-19-G",
-    "DISENO_H-280-45-19-G"
-  ],
-  "targets": ["Arena (kg)", "Grava (kg)", "Cemento (kg)"]
-}
-```
-
-#### Response Error (404 Not Found)
-```json
-{
-  "error": "Modelo no encontrado",
-  "detalle": "Ejecuta primero ml/MLPFuture.py para entrenar el modelo"
-}
-```
-
-#### Ejemplo con cURL
-```bash
-curl -X GET http://localhost:5000/api/ml/info
-```
-
----
-
-## 10. Predicción Individual
-
-### `POST /api/ml/predecir`
-
-Realiza una predicción de consumo de materiales para una fecha futura específica.
-
-#### Request Body
-```json
-{
-  "fecha": "2026-02-15",
-  "turno": "DIA",
-  "diseno": "H-210-45-19-G",
-  "volumen": 6.5
-}
-```
-
-#### Campos del Request
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `fecha` | string | **Sí** | Fecha de predicción (YYYY-MM-DD) |
-| `turno` | string | No | Turno (DIA/NOCHE, default: DIA) |
-| `diseno` | string | No | Diseño de mezcla (default: OTROS) |
-| `volumen` | number | No | Volumen en m³ (default: 6.0) |
-
-#### Response Success (200 OK)
-```json
-{
-  "fecha": "2026-02-15",
-  "Arena (kg)": 5134.67,
-  "Grava (kg)": 5850.23,
-  "Cemento (kg)": 2275.45
-}
-```
-
-#### Response Error (400 Bad Request)
-```json
-{
-  "error": "El campo 'fecha' es requerido"
-}
-```
-
-#### Ejemplo con cURL
-```bash
-curl -X POST http://localhost:5000/api/ml/predecir \
-  -H "Content-Type: application/json" \
-  -d '{
-    "fecha": "2026-02-15",
-    "turno": "DIA",
-    "diseno": "H-210-45-19-G",
-    "volumen": 6.5
-  }'
-```
-
-#### Ejemplo con Python
-```python
-import requests
-
-prediccion = {
-    "fecha": "2026-02-15",
-    "turno": "DIA",
-    "diseno": "H-210-45-19-G",
-    "volumen": 6.5
-}
-
-response = requests.post('http://localhost:5000/api/ml/predecir', json=prediccion)
-resultado = response.json()
-
-print(f"Predicción para {resultado['fecha']}:")
-print(f"  Arena:   {resultado['Arena (kg)']:>10,.2f} kg")
-print(f"  Grava:   {resultado['Grava (kg)']:>10,.2f} kg")
-print(f"  Cemento: {resultado['Cemento (kg)']:>10,.2f} kg")
-```
-
----
-
-## 11. Predicción en Lote
-
-### `POST /api/ml/predecir_batch`
-
-Realiza múltiples predicciones en una sola petición.
-
-#### Request Body
-```json
-{
-  "predicciones": [
-    {
-      "fecha": "2026-02-01",
-      "turno": "DIA",
-      "diseno": "H-210-45-19-G",
-      "volumen": 5.0
-    },
-    {
-      "fecha": "2026-02-02",
-      "turno": "NOCHE",
-      "diseno": "H-280-45-19-G",
-      "volumen": 8.0
-    },
-    {
-      "fecha": "2026-02-03",
-      "turno": "DIA",
-      "diseno": "H-210-45-19-G",
-      "volumen": 6.0
+      "id_insumo": 1,
+      "nombre_insumo": "Arena",
+      "unidad": "kg",
+      "stock_actual": 800000.0,
+      "stock_minimo": 200000.0,
+      "stock_maximo": 1500000.0
     }
   ]
 }
 ```
 
-#### Response Success (200 OK)
+---
+
+### POST /api/materiales
+
+Crea un material nuevo o actualiza uno existente, según llegue o no el campo `id`.
+
+- **Decorador**: `@solo_admin`
+- **Header requerido**: `X-CSRFToken`
+
+#### Caso 1: crear material nuevo (sin `id`)
+
+- **Body**:
+
 ```json
 {
-  "predicciones": [
-    {
-      "fecha": "2026-02-01",
-      "Arena (kg)": 4278.90,
-      "Grava (kg)": 4875.12,
-      "Cemento (kg)": 1896.34
-    },
-    {
-      "fecha": "2026-02-02",
-      "Arena (kg)": 6846.23,
-      "Grava (kg)": 7800.45,
-      "Cemento (kg)": 3034.67
-    },
-    {
-      "fecha": "2026-02-03",
-      "Arena (kg)": 5134.67,
-      "Grava (kg)": 5850.23,
-      "Cemento (kg)": 2275.45
-    }
-  ],
-  "total": 3
+  "nombre": "Microsílice",        // obligatorio, no solo números, UNIQUE
+  "unidad": "kg",                 // obligatorio, uno de: kg | l | m3 | unidad
+  "stock_actual": "500",          // opcional, >= 0 (admite coma decimal)
+  "stock_minimo": "100",          // opcional, >= 0
+  "stock_maximo": "2000"          // opcional, >= 0 y >= stock_minimo
 }
 ```
 
-#### Ejemplo con cURL
+- **Efectos**: inserta en `Insumos`; si `stock_actual > 0`, registra un movimiento
+  `INGRESO` en `movimientos` con el `usuario_id` de la sesión.
+- **Respuesta 201**:
+
+```json
+{ "ok": true, "id": 13, "mensaje": "Material creado" }
+```
+
+- **Respuesta 409** (UNIQUE constraint):
+
+```json
+{ "ok": false, "error": "Ya existe un material con ese nombre" }
+```
+
+#### Caso 2: actualizar material existente (con `id`)
+
+- **Body** (todos los campos de stock son opcionales, solo se actualizan los que llegan):
+
+```json
+{
+  "id": 1,
+  "stock_actual": "780000",       // opcional, >= 0
+  "stock_minimo": "150000",       // opcional, >= 0
+  "stock_maximo": "1600000"       // opcional, >= 0 y >= stock_minimo
+}
+```
+
+- **Efectos**: actualiza los campos provistos; si `stock_actual` cambió, registra un
+  movimiento `AJUSTE` en `movimientos` con el `usuario_id` de la sesión.
+- **Respuesta 200**:
+
+```json
+{ "ok": true, "mensaje": "Material actualizado" }
+```
+
+- **Respuesta 404** (id inexistente):
+
+```json
+{ "ok": false, "error": "Material no encontrado" }
+```
+
+- **Ejemplo cURL** (crear):
+
 ```bash
-curl -X POST http://localhost:5000/api/ml/predecir_batch \
+curl -b cookies.txt -X POST http://localhost:5000/api/materiales \
   -H "Content-Type: application/json" \
-  -d '{
-    "predicciones": [
-      {"fecha": "2026-02-01", "turno": "DIA", "diseno": "H-210", "volumen": 5},
-      {"fecha": "2026-02-02", "turno": "NOCHE", "diseno": "H-280", "volumen": 8}
-    ]
-  }'
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{"nombre": "Microsílice", "unidad": "kg", "stock_actual": "500", "stock_minimo": "100", "stock_maximo": "2000"}'
 ```
 
-#### Ejemplo con Python
-```python
-import requests
-import pandas as pd
+- **Ejemplo cURL** (actualizar):
 
-# Crear múltiples predicciones
-fechas = pd.date_range('2026-02-01', '2026-02-07', freq='D')
-predicciones = []
-
-for fecha in fechas:
-    predicciones.append({
-        "fecha": fecha.strftime('%Y-%m-%d'),
-        "turno": "DIA",
-        "diseno": "H-210-45-19-G",
-        "volumen": 6.0
-    })
-
-# Enviar batch
-response = requests.post('http://localhost:5000/api/ml/predecir_batch', json={
-    "predicciones": predicciones
-})
-
-resultados = response.json()['predicciones']
-
-# Convertir a DataFrame
-df = pd.DataFrame(resultados)
-print(df)
-
-# Totales por material
-print("\nTotales semanales:")
-print(f"Arena:   {df['Arena (kg)'].sum():,.2f} kg")
-print(f"Grava:   {df['Grava (kg)'].sum():,.2f} kg")
-print(f"Cemento: {df['Cemento (kg)'].sum():,.2f} kg")
+```bash
+curl -b cookies.txt -X POST http://localhost:5000/api/materiales \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{"id": 1, "stock_actual": "780000"}'
 ```
 
 ---
 
-## 📌 Notas Técnicas
+### GET /api/usuarios
 
-### Headers Requeridos
-Todas las peticiones POST deben incluir:
-```
-Content-Type: application/json
-```
+Lista los usuarios del sistema. Nunca devuelve `password_hash`.
 
-### Formato de Fechas
-Todas las fechas siguen el formato ISO 8601: `YYYY-MM-DD`
+- **Decorador**: `@solo_admin`
+- **Respuesta 200**:
 
-Ejemplos válidos:
-- `2026-01-23`
-- `2025-12-31`
-- `2026-02-01`
-
-### Codificación
-Todas las respuestas usan `charset=utf-8` con `ensure_ascii=False` para soportar caracteres especiales y tildes.
-
-### Manejo de Errores
-Todos los endpoints capturan excepciones y retornan:
 ```json
 {
-  "error": "Descripción del error",
-  "detalle": "Información adicional (opcional)"
+  "ok": true,
+  "usuarios": [
+    { "id": 1, "username": "admin", "rol": "Admin" },
+    { "id": 2, "username": "operador", "rol": "Operador" },
+    { "id": 3, "username": "visor", "rol": "Visualizador" }
+  ]
 }
 ```
 
-### CORS
-El servidor actualmente **no tiene** configuración CORS. Para entornos de producción que requieran acceso desde otros dominios, agregar:
+---
 
-```python
-from flask_cors import CORS
-CORS(app)
+### POST /api/usuarios
+
+Crea un usuario nuevo. El username debe ser único (case-insensitive) y la contraseña
+debe cumplir la política de complejidad.
+
+- **Decorador**: `@solo_admin`
+- **Header requerido**: `X-CSRFToken`
+- **Body**:
+
+```json
+{
+  "username": "nuevoOperador",       // 1 a 50 caracteres, único case-insensitive
+  "password": "Clave123!",           // 1 a 128 caracteres, con letra + número + símbolo
+  "rol": "Operador"                  // "Admin" | "Operador" | "Visualizador"
+}
+```
+
+- **Efectos**: inserta en `usuarios` con `password_hash` (Werkzeug
+  `pbkdf2:sha256`).
+- **Respuesta 201**:
+
+```json
+{
+  "ok": true,
+  "usuario": { "id": 4, "username": "nuevoOperador", "rol": "Operador" },
+  "mensaje": "Usuario creado correctamente."
+}
+```
+
+- **Respuesta 400** (validación):
+
+```json
+{ "ok": false, "error": "La contraseña debe tener al menos una letra, un número y un símbolo." }
+```
+
+```json
+{ "ok": false, "error": "El nombre de usuario ya existe." }
+```
+
+```json
+{ "ok": false, "error": "Rol inválido. Debe ser Admin, Operador o Visualizador." }
+```
+
+- **Ejemplo cURL**:
+
+```bash
+curl -b cookies.txt -X POST http://localhost:5000/api/usuarios \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{"username": "nuevoOperador", "password": "Clave123!", "rol": "Operador"}'
 ```
 
 ---
 
-## 🔐 Autenticación
+### GET /logout
 
-Actualmente el sistema **no requiere autenticación** para las APIs. Todas las peticiones son públicas.
+Cierra la sesión Flask y redirige a `/login`.
 
-Para producción se recomienda implementar:
-- JWT (JSON Web Tokens)
-- API Keys
-- OAuth 2.0
-
----
-
-## 📊 Códigos de Estado HTTP
-
-| Código | Descripción | Uso |
-|--------|-------------|-----|
-| `200 OK` | Petición exitosa | GET, cálculos completados |
-| `201 Created` | Recurso creado | POST exitoso de registro |
-| `400 Bad Request` | Petición inválida | Parámetros faltantes, valores inválidos |
-| `404 Not Found` | Recurso no encontrado | Material/receta inexistente |
-| `500 Internal Server Error` | Error del servidor | Errores de BD, excepciones |
+- **Decorador**: ninguno
+- **Efectos**: `session.clear()`; registra en `seguridad.log`:
+  `"Logout | usuario=X ip=Y"`.
+- **Respuesta**: `302 Found` → `Location: /login`.
 
 ---
 
-## 🧪 Testing de APIs
+## Manejo de errores
 
-### Colección Postman
+### Mensaje genérico
 
-Para facilitar el testing, se puede crear una colección de Postman con todos los endpoints.
+Para evitar filtrar información sensible en errores 500, las rutas devuelven el
+mensaje fijo:
 
-### Ejemplo de Script de Testing
-
-```python
-import requests
-import json
-
-BASE_URL = "http://localhost:5000"
-
-def test_dashboard():
-    response = requests.get(f"{BASE_URL}/api/dashboard")
-    assert response.status_code == 200
-    assert 'consumo_diario' in response.json()
-    print("✅ Dashboard OK")
-
-def test_historial():
-    params = {"inicio": "2025-01-01", "fin": "2025-12-31"}
-    response = requests.get(f"{BASE_URL}/api/historial_consumo", params=params)
-    assert response.status_code == 200
-    assert 'tiempos' in response.json()
-    assert 'bst' in response.json()['tiempos']
-    assert 'avl' in response.json()['tiempos']
-    print("✅ Historial OK")
-
-def test_prediccion():
-    data = {
-        "fecha": "2026-02-15",
-        "turno": "DIA",
-        "diseno": "H-210-45-19-G",
-        "volumen": 6.0
-    }
-    response = requests.post(f"{BASE_URL}/api/ml/predecir", json=data)
-    assert response.status_code == 200
-    assert 'Arena (kg)' in response.json()
-    print("✅ Predicción OK")
-
-if __name__ == "__main__":
-    test_dashboard()
-    test_historial()
-    test_prediccion()
-    print("\n🎉 Todas las pruebas pasaron exitosamente")
+```json
+{ "ok": false, "error": "Ocurrió un error al procesar la solicitud. Intenta de nuevo más tarde." }
 ```
+
+El traceback completo se registra en `seguridad.log` y stdout.
+
+### Errores 401 / 403 desde los decoradores
+
+Si una ruta API protegida se invoca sin sesión:
+
+```json
+{ "ok": false, "error": "No has iniciado sesión." }   // 401
+```
+
+Si el rol es insuficiente:
+
+```json
+{ "ok": false, "error": "No tienes permisos para acceder a este recurso." }   // 403
+```
+
+### Errores CSRF
+
+Cualquier POST sin `X-CSRFToken` o con token inválido recibe `400 Bad Request` con un
+mensaje del estilo `"El token CSRF ha expirado o es inválido"`. El único POST exento
+es `/api/login`.
 
 ---
 
-## 🚀 Mejores Prácticas
+## Ejemplos end-to-end
 
-### 1. Manejo de Errores
-Siempre verificar el código de estado antes de procesar la respuesta:
+### Flujo completo: crear un despacho
 
-```python
-response = requests.get('http://localhost:5000/api/dashboard')
-if response.status_code == 200:
-    data = response.json()
-    # Procesar datos
-else:
-    print(f"Error: {response.status_code}")
-    print(response.json().get('error', 'Error desconocido'))
+```bash
+# 1. Login
+curl -c cookies.txt -X POST http://localhost:5000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"usuario": "admin", "password": "Admin123!"}'
+
+# 2. Obtener token CSRF
+TOKEN=$(curl -b cookies.txt -s http://localhost:5000/api/csrf-token \
+  | python -c "import sys, json; print(json.load(sys.stdin)['csrf_token'])")
+
+# 3. Cruce previo (verifica stock antes de guardar)
+curl -b cookies.txt -X POST http://localhost:5000/api/cruce_consumo_registro \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{"fecha": "2025-07-08", "diseno_mezcla": "UCEM-HE", "volumen_m3": "24.5"}'
+
+# 4. Guardar despacho
+curl -b cookies.txt -X POST http://localhost:5000/api/despachos \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{
+    "fecha": "2025-07-08",
+    "volumen_m3": "24.5",
+    "diseno_mezcla": "UCEM-HE",
+    "turno": "Diurno",
+    "wbs": "WBS-001",
+    "zona": "ZONA_NORTE",
+    "arena_humedad_pct": "6.5",
+    "asentamiento_final_cm": "22",
+    "temperatura_c": "18"
+  }'
+
+# 5. Ver historial del día
+curl -b cookies.txt "http://localhost:5000/api/historial_consumo?inicio=2025-07-08&fin=2025-07-08"
+
+# 6. Ver alertas de stock
+curl -b cookies.txt "http://localhost:5000/api/alertas_consumo?inicio=2025-07-08&fin=2025-07-08"
+
+# 7. Logout
+curl -b cookies.txt http://localhost:5000/logout
 ```
 
-### 2. Timeout en Peticiones
-Siempre usar timeout para evitar bloqueos:
+### Flujo completo: gestionar inventario
 
-```python
-response = requests.get('http://localhost:5000/api/historial_consumo', 
-                       params={"inicio": "2025-01-01", "fin": "2025-12-31"},
-                       timeout=10)
+```bash
+# Login + token
+curl -c cookies.txt -X POST http://localhost:5000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"usuario": "admin", "password": "Admin123!"}'
+
+TOKEN=$(curl -b cookies.txt -s http://localhost:5000/api/csrf-token \
+  | python -c "import sys, json; print(json.load(sys.stdin)['csrf_token'])")
+
+# Listar materiales
+curl -b cookies.txt http://localhost:5000/api/materiales
+
+# Crear material nuevo
+curl -b cookies.txt -X POST http://localhost:5000/api/materiales \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{"nombre": "Microsílice", "unidad": "kg", "stock_actual": "500", "stock_minimo": "100", "stock_maximo": "2000"}'
+
+# Actualizar stock de un material existente (id=1)
+curl -b cookies.txt -X POST http://localhost:5000/api/materiales \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{"id": 1, "stock_actual": "780000"}'
 ```
 
-### 3. Validación de Datos
-Validar datos antes de enviar:
+### Flujo completo: gestionar usuarios
 
-```python
-from datetime import datetime
+```bash
+# Login + token (como admin)
+curl -c cookies.txt -X POST http://localhost:5000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"usuario": "admin", "password": "Admin123!"}'
 
-def validar_fecha(fecha_str):
-    try:
-        datetime.strptime(fecha_str, '%Y-%m-%d')
-        return True
-    except ValueError:
-        return False
+TOKEN=$(curl -b cookies.txt -s http://localhost:5000/api/csrf-token \
+  | python -c "import sys, json; print(json.load(sys.stdin)['csrf_token'])")
 
-fecha = "2026-02-15"
-if validar_fecha(fecha):
-    # Hacer petición
-    pass
+# Listar usuarios
+curl -b cookies.txt http://localhost:5000/api/usuarios
+
+# Crear usuario nuevo
+curl -b cookies.txt -X POST http://localhost:5000/api/usuarios \
+  -H "Content-Type: application/json" \
+  -H "X-CSRFToken: $TOKEN" \
+  -d '{"username": "jefePlanta", "password": "Jefe2025!", "rol": "Operador"}'
 ```
-
----
-
-**Última actualización**: Enero 2026  
-**Versión de la API**: 1.0

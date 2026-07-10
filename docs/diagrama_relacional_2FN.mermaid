@@ -1,72 +1,90 @@
+%% =========================================================================
+%% Diagrama Relacional — 2FN (Segunda Forma Normal)
+%% Proyecto: Consumo de Materiales - Minería
+%% 
+%% Estado intermedio de normalización:
+%%   - Catálogos externos ya separados (Zonas, Centros_Costo, Turnos, Disenos_Mezcla)
+%%   - Producción se separa de los catálogos
+%%   - PERO la receta aún es una sola tabla plana con una columna por cada insumo
+%%     (dependencia parcial: todos los insumos dependen de diseno_mezcla pero
+%%      se almacenan en la misma fila -> viola 3FN)
+%%   - Aún NO existen Receta_Detalle ni Produccion_Insumos (esas surgen en 3FN)
+%% 
+%% NOTA: Este diagrama representa el estado de diseño ANTES de llegar a 3FN.
+%%       Para el esquema real implementado, ver diagrama_relacional_3FN.mermaid
+%% =========================================================================
+
 erDiagram
 
-PRODUCCION {
-    int produccion_id PK
-    date fecha
-    int numero_lote
-    decimal volumen_m3
-    decimal asentamiento
-    decimal temperatura
-    decimal arena_humedad
+    Produccion_Diaria {
+        INTEGER id_produccion PK
+        TEXT fecha
+        TEXT lote_numero
+        REAL volumen_m3
+        REAL arena_humedad_pct
+        REAL asentamiento_final_cm
+        REAL temperatura_c
+        TEXT diseno_mezcla FK
+        INTEGER id_zona FK
+        INTEGER id_cc FK
+        INTEGER id_turno FK
+    }
 
-    int turno_id FK
-    int zona_id FK
-    int wbs_id FK
-    int diseno_id FK
-    int receta_id FK
-}
+    Receta {
+        TEXT diseno_mezcla PK "FK lógica a Disenos_Mezcla"
+        REAL arena_kg
+        REAL grava_kg
+        REAL cemento_kg
+        REAL agua_kg
+        REAL rheo1000_kg
+        REAL sika115_kg
+        REAL basf719_kg
+        REAL sika200_kg
+        REAL delvo_kg
+        REAL glenium_7950_kg
+        REAL glenium_7970_kg
+        REAL fibras_kg
+    }
 
-RECETA {
-    int receta_id PK
-    string nombre_receta
+    Insumos {
+        INTEGER id_insumo PK
+        TEXT nombre_insumo UK
+        TEXT unidad
+        REAL stock_minimo
+        REAL stock_maximo
+        REAL stock_actual
+    }
 
-    decimal arena_kg
-    decimal grava_kg
-    decimal cemento_kg
-    decimal agua_l
+    Zonas {
+        INTEGER id_zona PK
+        TEXT nombre_zona UK
+    }
 
-    decimal glenium_ml
-    decimal silka_ml
-    decimal rheo1000_ml
-    decimal basf719_ml
-    decimal masterglenium7950_ml
-    decimal masterglenium7970_ml
-    decimal fibras_kg
-}
+    Centros_Costo {
+        INTEGER id_cc PK
+        TEXT codigo_cc UK
+    }
 
-MATERIALES {
-    int material_id PK
-    string nombre_material
-    string unidad_medida
-    decimal stock_minimo
-    decimal stock_maximo
-    decimal stock_actual
-}
+    Turnos {
+        INTEGER id_turno PK
+        TEXT nombre_turno UK
+    }
 
-TURNO {
-    int turno_id PK
-    string nombre
-}
+    Disenos_Mezcla {
+        TEXT diseno_mezcla PK
+    }
 
-ZONA {
-    int zona_id PK
-    string nombre
-}
+    %% Catálogos → Producción
+    Disenos_Mezcla ||--o{ Produccion_Diaria : "se aplica en"
+    Zonas          ||--o{ Produccion_Diaria : "pertenece a"
+    Centros_Costo  ||--o{ Produccion_Diaria : "se asigna a"
+    Turnos         ||--o{ Produccion_Diaria : "ocurre en"
 
-WBS {
-    int wbs_id PK
-    string codigo
-}
+    %% Diseño → Receta (cabecera)
+    Disenos_Mezcla ||--|| Receta : "define a"
 
-DISENO {
-    int diseno_id PK
-    string nombre
-}
-
-TURNO ||--o{ PRODUCCION : posee
-ZONA ||--o{ PRODUCCION : pertenece
-WBS ||--o{ PRODUCCION : asigna
-DISENO ||--o{ PRODUCCION : utiliza
-RECETA ||--o{ PRODUCCION : usa
-
-RECETA ||--o{ MATERIALES : contiene
+    %% En 2FN la receta referencia lógicamente a los insumos pero SIN FK formal
+    %% (es justamente la dependencia parcial que 3FN eliminará con Receta_Detalle).
+    %% No se dibuja como arista ER porque no hay constraint de integridad;
+    %% cada columna arena_kg, grava_kg, cemento_kg, etc. menciona un insumo
+    %% distinto, pero la relación no está normalizada.
