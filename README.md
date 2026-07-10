@@ -1,563 +1,465 @@
-# 📦 Sistema de Gestión y Predicción de Consumo de Materiales
+# Sistema de Gestión de Consumo de Materiales — Minería
 
-Sistema web integral desarrollado con **Flask**, **SQLite**, **Estructuras de Datos Avanzadas** y **Machine Learning** para el análisis, gestión y predicción del consumo de materiales en plantas de producción de concreto.
-
-Este proyecto implementa algoritmos eficientes de búsqueda (BST y AVL), análisis estadístico automatizado, y modelos de aprendizaje automático para la predicción de demanda de materiales.
-
----
-
-## 🎯 Características Principales
-
-### 🔍 Búsqueda Eficiente con Estructuras de Datos
-- **Árboles Binarios de Búsqueda (BST)**: Implementación clásica para consultas de registros históricos
-- **Árboles AVL Auto-balanceados**: Garantiza O(log n) en todas las operaciones
-- **Comparación de rendimiento**: Medición en tiempo real de BST vs AVL
-- **Búsquedas por rango de fechas**: Optimizadas con poda de subárboles
-
-### 📊 Análisis y Visualización de Datos
-- **Gráficas dinámicas con Plotly**: 
-  - Volumen por día y por diseño de mezcla
-  - Histogramas de distribución de materiales
-  - Boxplots de materiales y aditivos
-  - Matrices de correlación (heatmaps)
-  - Análisis de frecuencia de diseños
-- **Dashboard en tiempo real**: Consumo diario, registros recientes, alertas de inventario
-- **Exportación de gráficas**: Guardado en alta resolución (300 DPI)
-
-### 🤖 Machine Learning para Predicción
-- **Modelos implementados**:
-  - Random Forest Regressor
-  - Gradient Boosting Regressor
-  - XGBoost Regressor
-- **Predicción multi-salida**: Arena, Grava y Cemento simultáneamente
-- **Features de tiempo avanzadas**:
-  - Codificación cíclica (sin/cos) para estacionalidad
-  - Variables temporales polinomiales (días, días², días³)
-  - Variables de calendario (mes, día del año, semana)
-- **Métricas de evaluación**: R², RMSE, MAE, MAPE por material
-- **Predicción en lote**: API para múltiples predicciones simultáneas
-
-### 🧹 Limpieza y Preparación de Datos
-- **Detección automática de datos faltantes**
-- **Validación de datos irracionales**:
-  - Valores negativos
-  - Humedad fuera de rango (0-100%)
-  - Volúmenes inválidos
-  - Proporciones cemento/volumen inconsistentes
-- **Análisis de outliers con método IQR**:
-  - Detección con factor configurable (1.5 o 3.0)
-  - Winsorización opcional (reemplazo por límites)
-- **Reportes detallados**: Estadísticas de limpieza y datos eliminados
-
-### 🌐 API REST Completa
-- **Dashboard**: `/api/dashboard` - Datos principales del sistema
-- **Historial**: `/api/historial_consumo` - Búsquedas con BST/AVL
-- **Registro**: `/api/despachos` - Alta de despachos con validación
-- **Inventario**: `/api/materiales` - Gestión de stock
-- **Usuarios**: `/api/usuarios` - Creación y listado de usuarios solo para Admin
-- **Análisis**: `/api/resumen_consumo` - Agregaciones por rango
-- **Gráficas**: `/api/graficas` - Generación dinámica con Plotly
-- **Machine Learning**: 
-  - `/api/ml/info` - Información del modelo
-  - `/api/ml/predecir` - Predicción individual
-  - `/api/ml/predecir_batch` - Predicción en lote
+Sistema web desarrollado con **Flask** y **SQLite** para gestionar el consumo diario de
+materiales en una planta de producción de concreto (despachos / lotes). Cubre el ciclo
+completo: catálogos (diseños de mezcla, zonas, centros de costo, turnos), inventario de
+insumos con auditoría de movimientos, registro de despachos con cálculo automático de
+consumo, historial filtrable y cruce de consumo vs stock disponible. Incluye autenticación
+con hashing, control de acceso por roles (Admin / Operador / Visualizador), protección
+CSRF, rate limiting, headers de seguridad y bloqueo persistente contra fuerza bruta.
 
 ---
 
-## 🧰 Tecnologías Utilizadas
+## Tabla de contenidos
 
-### Backend
-- **Flask 3.x**: Framework web ligero y flexible
-- **SQLite3**: Base de datos relacional embebida
-- **Pandas**: Manipulación y análisis de datos
-- **NumPy**: Operaciones numéricas y matrices
-
-### Machine Learning
-- **Scikit-learn**: Modelos de regresión y preprocesamiento
-- **XGBoost**: Gradient Boosting optimizado
-- **StandardScaler**: Normalización de features
-
-### Visualización
-- **Plotly**: Gráficas interactivas de alta calidad
-- **Matplotlib**: Visualizaciones estáticas para análisis
-
-### Estructuras de Datos
-- **Implementación propia de BST**: Árbol Binario de Búsqueda
-- **Implementación propia de AVL**: Árbol auto-balanceado
-- **Patrón de diseño**: Uso de clases abstractas y herencia
+- [Características principales](#características-principales)
+- [Stack tecnológico](#stack-tecnológico)
+- [Estructura del proyecto](#estructura-del-proyecto)
+- [Modelo de datos (3FN)](#modelo-de-datos-3fn)
+- [Instalación y configuración inicial](#instalación-y-configuración-inicial)
+- [Uso del sistema](#uso-del-sistema)
+- [Autenticación y roles](#autenticación-y-roles)
+- [Seguridad implementada](#seguridad-implementada)
+- [Documentación adicional](#documentación-adicional)
+- [Solución de problemas](#solución-de-problemas)
 
 ---
 
-## 📥 Instalación
+## Características principales
 
-### Requisitos Previos
+### Gestión operativa
 
-1. **Git** - [Descargar aquí](https://git-scm.com/)
-2. **Python 3.10+** - [Descargar aquí](https://www.python.org/downloads/)
+- **Dashboard**: KPIs de producción diaria (m³ producidos hoy), registros de los últimos
+  7 días e inventario en alerta (OK / Cerca / Bajo mínimo).
+- **Registro de despachos**: formulario guiado que valida fecha, volumen, turno, zona,
+  WBS, humedad de arena (4–10 %), asentamiento (15–30 cm) y temperatura (−10 a 50 °C).
+  Antes de guardar, ejecuta un **cruce consumo vs stock** que bloquea el guardado si el
+  despacho dejaría algún insumo en déficit.
+- **Inventario de insumos**: alta de materiales con unidad (kg / l / m3 / unidad),
+  stock actual, mínimo y máximo; edición de stock y de márgenes; todo movimiento
+  (INGRESO / EGRESO / AJUSTE) queda registrado en la tabla `movimientos`.
+- **Historial filtrable** por rango de fechas, diseño de mezcla, zona, turno y WBS.
+  Devuelve filas pivoteadas (una columna por insumo) más un resumen agregado y un
+  cruce de consumo vs stock disponible.
+- **Cruce consumo vs stock**: valida un despacho individual (pre-guardado) o un rango
+  completo de despachos contra el inventario actual, marcando cada insumo como
+  `OK`, `Bajo mínimo` o `Déficit`.
 
-Verificar instalación:
-```bash
-git --version
-python --version
-```
+### Seguridad y control de acceso
 
-### Clonar el Repositorio
+- **Autenticación contra la base de datos** con contraseñas hasheadas (Werkzeug
+  `pbkdf2:sha256`).
+- **Control de acceso por roles**: Admin, Operador y Visualizador con decorators
+  `@solo_admin`, `@admin_u_operador`, `@cualquier_usuario`.
+- **Protección CSRF** global con Flask-WTF.
+- **Rate limiting** en `/api/login` (5 intentos por minuto) y **bloqueo persistente de
+  24 horas** tras 5 intentos fallidos (sobrevive reinicios del servidor).
+- **Timeout de inactividad** de 15 minutos.
+- **Headers de seguridad** en todas las respuestas y `Cache-Control: no-store` en rutas
+  protegidas.
+- **Logging de auditoría** en `seguridad.log` para logins, bloqueos, denegaciones de
+  rol, creación de despachos y ajustes de inventario.
 
-```bash
-git clone https://github.com/AndyNeva/proyecto-consumo-materiales.git
-cd proyecto-consumo-materiales
-```
-
-⚠️ **Importante**: Nunca descargar como ZIP, siempre usar Git.
-
-### Instalar Dependencias
-
-```bash
-pip install -r requirements.txt
-```
-
-Dependencias principales:
-```
-Flask>=3.0.0
-pandas>=2.0.0
-numpy>=1.24.0
-scikit-learn>=1.3.0
-xgboost>=2.0.0
-plotly>=5.17.0
-matplotlib>=3.7.0
-openpyxl>=3.1.0
-```
+> Para el detalle completo ver [`docs/seguridad_implementada.md`](docs/seguridad_implementada.md).
 
 ---
 
-## 🚀 Configuración Inicial
+## Stack tecnológico
 
-### 1. Crear Base de Datos
+| Capa            | Tecnología                                   |
+|-----------------|----------------------------------------------|
+| Backend         | Flask ≥ 2.3                                  |
+| Base de datos   | SQLite 3 (esquema relacional en 3FN)         |
+| Autenticación   | Werkzeug (`generate_password_hash`)          |
+| Protección CSRF | Flask-WTF (`CSRFProtect`)                    |
+| Rate limiting   | flask-limiter (almacenamiento en memoria)    |
+| Configuración   | python-dotenv (`SECRET_KEY`, `DB_PATH`)      |
+| Carga de Excel  | openpyxl ≥ 3.1                               |
+| Frontend        | HTML + CSS + JavaScript vanilla (sin build)  |
 
-**⚠️ CRÍTICO**: Estos tres scripts deben ejecutarse en orden para crear la base de datos funcional.
-
-```bash
-# Paso 1: Crear esquema de base de datos
-python database/01_crear_esquema.py
-
-# Paso 2: Cargar datos base (usuarios y materiales)
-python database/02_datos_base.py
-
-# Paso 3: Migrar datos históricos desde Excel
-python database/03_cargar_datos_iniciales.py
-```
-
-**Archivo requerido**: `data/raw/Batch_Plant_Production_2025.xlsm`
-
-**Resultado**: Se crea `db/gestion_materiales.db` con:
-- Tabla `usuarios`
-- Tabla `materiales` (con inventario)
-- Tabla `despachos` (producción histórica)
-- Tabla `recetas` (diseños de mezcla)
-- Tabla `movimientos` (historial de inventario)
-- Tabla `centros_costos` y `zonas`
-
-#### 1.1. Poblar Inventario de Materiales
-
-**⚠️ IMPORTANTE**: Después de crear el esquema, poblar la tabla de materiales con stock inicial.
-
-```bash
-# Paso 4: Poblar materiales con inventario inicial
-python database/poblar_materiales.py
-```
-
-Este script:
-- Limpia la tabla `materiales`
-- Inserta 12 materiales con stock inicial:
-  - Arena, Grava, Cemento, Agua
-  - Aditivos: RHEO 1000, Sika 115, BASF 719, Sika 200
-  - Aditivos especiales: Delvo, Glenium 7950, Glenium 7970, Fibras
-- Configura stock actual, mínimo y máximo para cada material
-
-**Responder 's' cuando pregunte si desea poblar la tabla.**
-
-### 2. Limpiar y Preparar Datos
-
-```bash
-python ml/LimpiezaDatos.py
-```
-
-Este script:
-- Lee `data/raw/Datos_Stat_Model.csv`
-- Elimina datos faltantes e irracionales
-- Detecta/winsoriza outliers
-- Genera `data/processed/DatosLimpios.csv`
-- Muestra reporte detallado de limpieza
-
-### 3. Entrenar Modelo de Machine Learning
-
-**⚠️ CRÍTICO**: Este paso es obligatorio para que las predicciones funcionen.
-
-```bash
-python ml/MLPFuture.py
-```
-
-Este script:
-- Entrena modelos Random Forest, Gradient Boosting y XGBoost
-- Selecciona el mejor modelo según R² de validación
-- Guarda el modelo en `ml/modelo_prediccion.pkl`
-- Genera gráficas de evaluación en `ml/graficas/`
-- Muestra métricas detalladas por material
-
-**Sin este archivo `.pkl`, la aplicación NO podrá hacer predicciones.**
+> `requirements.txt` también lista `flask-cors` y `joblib`, que en la versión actual
+> del código no se usan; se conservan por compatibilidad con extensiones futuras.
 
 ---
 
-## 🎮 Uso del Sistema
-
-### Iniciar el Servidor
-
-```bash
-python app.py
-```
-
-El servidor estará disponible en: `http://localhost:5000`
-
-### Credenciales de Acceso
-
-Las credenciales se crean con el script de usuarios (ver sección **Autenticación y Roles**). Ya no se usan credenciales hardcodeadas.
-
-### Páginas Web Disponibles
-
-| Ruta | Descripción |
-|------|-------------|
-| `/login` | Página de inicio de sesión |
-| `/dashboard` | Panel principal con métricas |
-| `/registro` | Registro de nuevos despachos |
-| `/inventario` | Gestión de materiales |
-| `/historial` | Búsqueda de registros históricos |
-| `/graficas` | Visualización de datos |
-| `/ml` | Predicciones con Machine Learning |
-
----
-
-## 🔐 Autenticación y Roles
-
-El sistema usa login contra la tabla `usuarios` (contraseñas hasheadas con Werkzeug) y control de acceso por **3 perfiles**:
-
-| Rol | Puede hacer |
-|-----|-------------|
-| **Admin** | Acceso total: ver, agregar, editar y eliminar cualquier dato, incluida la gestión de usuarios e inventario. |
-| **Operador** | Ver el inventario y agregar registros nuevos (los registros pasan una validación de consistencia antes de confirmarse). |
-| **Visualizador** | Solo ver el dashboard principal. Sin acceso a inventario, registros ni edición. |
-
-**Medidas de seguridad del módulo de autenticación** (complementan las del proyecto): hash seguro de contraseñas, sesiones Flask con `SECRET_KEY` desde variables de entorno, consultas parametrizadas (anti SQL injection), límite de longitud de contraseña (128 caracteres) y bloqueo temporal de 15 minutos tras 5 intentos fallidos.
-
-### Crear los usuarios iniciales
-
-Después de crear el esquema y los datos base, ejecuta una sola vez:
-
-```bash
-python scripts/crear_usuarios.py
-```
-
-Esto añade la columna `password_hash` (si falta) y crea los usuarios de arranque:
-
-| Usuario | Contraseña | Rol |
-|---------|------------|-----|
-| `admin` | `Admin123!` | Admin |
-| `operador` | `Operador123!` | Operador |
-| `visor` | `Visor123!` | Visualizador |
-
-> ⚠️ Cambia estas contraseñas de demostración antes de cualquier uso real.
-
----
-
-## 🏗️ Arquitectura del Proyecto
+## Estructura del proyecto
 
 ```
-proyecto-consumo-materiales/
-├── app.py                          # Aplicación Flask principal
-├── requirements.txt                # Dependencias Python
+consumo-materiales-mineria/
+├── app.py                         # Aplicación Flask (rutas HTML + API + middlewares)
+├── requirements.txt               # Dependencias Python
+├── README.md                      # Este archivo
 │
-├── database/                       # Scripts de base de datos
-│   ├── 01_crear_esquema.py        # Crea tablas
-│   ├── 02_datos_base.py           # Inserta datos iniciales
-│   ├── 03_cargar_datos_iniciales.py  # Migra datos históricos
-│   └── poblar_materiales.py       # Pobla inventario de materiales
+├── auth/                          # Autenticación y control de acceso
+│   ├── __init__.py
+│   ├── login.py                   # Hashing, verificación, bloqueo por intentos
+│   ├── roles.py                   # Decoradores: solo_admin, admin_u_operador, cualquier_usuario
+│   └── usuarios.py                # CRUD de usuarios (validaciones, alta, listado)
 │
-├── db/
-│   └── gestion_materiales.db      # Base de datos SQLite
+├── db/                            # Esquema y datos
+│   ├── __init__.py
+│   ├── gestion_materiales.db      # Base de datos SQLite (se genera al ejecutar el esquema)
+│   ├── 01_crear_esquema.py        # Crea las 11 tablas del esquema 3FN
+│   ├── 02_poblar_insumos.py       # Puebla Insumos (12 materiales) + 3 usuarios demo
+│   ├── 03_cargar_datos_iniciales.py  # Migra el histórico desde el Excel
+│   ├── utilidades.py              # Helpers (limpiar_numero para Excel)
+│   ├── ver_datos.py               # Debug: imprime 5 filas de cada tabla
+│   ├── ver_recetas.py             # Debug: pivotea Receta_Detalle
+│   └── verificador_tablas.py      # Verifica que las tablas existan
 │
-├── data/
-│   ├── raw/                       # Datos originales
-│   │   ├── Batch_Plant_Production_2025.xlsm
-│   │   └── Datos_Stat_Model.csv
-│   └── processed/                 # Datos limpios
-│       └── DatosLimpios.csv
+├── services/                      # Lógica de negocio
+│   ├── __init__.py
+│   ├── dashboard.py               # KPIs (consumo_diario, registros_ultima_semana)
+│   ├── despachos.py               # Inserta despacho + descuenta stock + audita
+│   ├── historial.py               # Historial filtrable + resumen agregado
+│   └── inventario.py              # CRUD de materiales + cruce consumo vs stock
 │
-├── ed/                            # Estructuras de Datos
-│   ├── estructuras.py             # BST y AVL implementados
-│   └── busquedas.py               # Funciones de búsqueda
+├── utils/                         # Utilidades transversales
+│   ├── __init__.py
+│   ├── db.py                      # conectar(), RUTA_BD, whitelist de tablas
+│   └── logging_seguridad.py       # logger_seguridad → seguridad.log + stdout
 │
-├── ml/                            # Machine Learning
-│   ├── MLPFuture.py               # Entrenamiento del modelo
-│   ├── predictor.py               # API de predicción
-│   ├── graficas.py                # Generación de gráficas
-│   ├── LimpiezaDatos.py           # Limpieza de datos
-│   ├── modelo_prediccion.pkl      # Modelo entrenado (generado)
-│   └── graficas/                  # Gráficas guardadas
+├── scripts/                       # Scripts de mantenimiento
+│   ├── __init__.py
+│   ├── crear_usuarios.py          # Crea / resetea usuarios demo (variantes con !)
+│   └── crear_tabla_intentos.py    # Crea intentos_login si falta (legacy)
 │
-├── utils/
-│   └── loaders.py                 # Funciones de BD y carga de datos
-│
-├── templates/                     # Plantillas HTML (frontend)
+├── templates/                     # Plantillas Jinja2
 │   ├── login.html
 │   ├── dashboard.html
 │   ├── registro.html
 │   ├── inventario.html
 │   ├── historial.html
-│   ├── graficas.html
-│   └── ml_prediccion.html
+│   └── usuarios.html
 │
-└── static/                        # Archivos estáticos (CSS, JS)
-    ├── css/
-    └── js/
-        ├── dashboard.js           # Funciones del dashboard
-        ├── graficas.js            # Renderizado de gráficas Plotly
-        ├── historial.js           # Búsqueda y filtros de historial
-        ├── ml_prediccion.js       # Interfaz de predicciones ML
-        └── registro.js            # Formulario de registro de despachos
+├── static/js/                     # JavaScript del frontend
+│   ├── dashboard.js
+│   ├── registro.js
+│   ├── historial.js
+│   └── usuarios.js
+│
+├── data/
+│   ├── raw/
+│   │   ├── Batch_Plant_Production_2025.xlsm   # Histórico de despachos (entrada)
+│   │   └── Datos_Stat_Model.csv               # Datos estadísticos (referencia)
+│   └── processed/                             # Salidas de procesos (vacío por defecto)
+│
+└── docs/                          # Documentación
+    ├── API_DOCUMENTATION.md
+    ├── seguridad_implementada.md
+    ├── diagrama_relacional_original.mermaid   # Estado 1FN (histórico)
+    ├── diagrama_relacional_2FN.mermaid        # Estado 2FN (intermedio)
+    └── diagrama_relacional_3FN.mermaid        # Esquema final implementado
 ```
 
 ---
 
-## 🔍 Componentes Técnicos Detallados
+## Modelo de datos (3FN)
 
-### Estructuras de Datos: BST y AVL
+El esquema relacional está en **Tercera Forma Normal** y contiene **11 tablas**. La
+fuente de verdad es `db/01_crear_esquema.py`. El diagrama visual está en
+[`docs/diagrama_relacional_3FN.mermaid`](docs/diagrama_relacional_3FN.mermaid).
 
-#### Árbol Binario de Búsqueda (BST)
-```python
-class ArbolBinarioBusqueda(ArbolBinario):
-    """
-    Complejidad:
-    - Mejor caso (balanceado): O(log n)
-    - Peor caso (degenerado): O(n)
-    """
-```
+### Tablas del catálogo
 
-**Ventajas**: Implementación simple, buena eficiencia en datos aleatorios
+| Tabla            | PK              | Columnas principales                              |
+|------------------|-----------------|---------------------------------------------------|
+| `Zonas`          | `id_zona`       | `nombre_zona` (UNIQUE)                            |
+| `Centros_Costo`  | `id_cc`         | `codigo_cc` (UNIQUE)                              |
+| `Turnos`         | `id_turno`      | `nombre_turno` (UNIQUE) — Diurno / Nocturno       |
+| `Disenos_Mezcla` | `diseno_mezcla` | — catálogo monobranquial de diseños               |
 
-**Desventajas**: Puede degenerar a lista enlazada con datos ordenados
+### Tablas de inventario y recetas
 
-#### Árbol AVL
-```python
-class ArbolAVL(ArbolBinario):
-    """
-    Complejidad garantizada: O(log n)
-    Auto-balanceo con rotaciones
-    """
-```
+| Tabla             | PK                                | Columnas principales                            |
+|-------------------|-----------------------------------|------------------------------------------------|
+| `Insumos`         | `id_insumo`                       | `nombre_insumo` (UNIQUE), `unidad`, `stock_minimo`, `stock_maximo`, `stock_actual` |
+| `Receta_Detalle`  | `id_receta` + UNIQUE(`diseno_mezcla`,`id_insumo`) | `cantidad_requerida` — FK a `Disenos_Mezcla` (CASCADE) y `Insumos` |
+| `movimientos`     | `id`                              | `usuario_id` → `usuarios`, `id_insumo` → `Insumos`, `cantidad`, `fecha`, `tipo` (INGRESO/EGRESO/AJUSTE) |
 
-**Ventajas**: Rendimiento garantizado, ideal para datos ordenados
+### Tablas de producción
 
-**Características**:
-- Factor de balance: altura(izq) - altura(der)
-- Rotaciones simples (derecha/izquierda)
-- Rotaciones dobles (izq-der, der-izq)
+| Tabla                 | PK                                        | Columnas principales                                                              |
+|-----------------------|-------------------------------------------|-----------------------------------------------------------------------------------|
+| `Produccion_Diaria`   | `id_produccion`                           | `fecha`, `lote_numero`, `volumen_m3`, `diseno_mezcla` (FK), `id_zona` (FK), `id_cc` (FK), `arena_humedad_pct`, `asentamiento_final_cm`, `temperatura_c`, `id_turno` (FK) |
+| `Produccion_Insumos`  | (`id_produccion`, `id_insumo`) compuesta  | `cantidad_real` — FK a `Produccion_Diaria` (CASCADE) y `Insumos`                  |
 
-### Machine Learning: Flujo de Trabajo
+### Tablas de seguridad
 
-1. **Carga de datos limpios**
-   ```python
-   df = pd.read_csv('data/processed/DatosLimpios.csv')
-   ```
+| Tabla            | PK      | Columnas principales                                                   |
+|------------------|---------|------------------------------------------------------------------------|
+| `usuarios`       | `id`    | `username` (UNIQUE), `rol` (Admin/Operador/Visualizador), `password_hash` |
+| `intentos_login` | `clave` | `clave = "{username}@{ip}"`, `intentos`, `bloqueado_hasta` (timestamp unix) |
 
-2. **Ingeniería de features**
-   - Conversión de fechas a días numéricos
-   - Variables polinomiales: días, días², días³
-   - Codificación cíclica: sin(2π·mes/12), cos(2π·mes/12)
-   - One-hot encoding de diseños top
+### Relaciones principales
 
-3. **División y escalado**
-   ```python
-   X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-   scaler_X = StandardScaler().fit(X_train)
-   scaler_y = StandardScaler().fit(y_train)
-   ```
-
-4. **Entrenamiento de modelos**
-   ```python
-   modelos = {
-       'Random Forest': MultiOutputRegressor(RandomForestRegressor(...)),
-       'Gradient Boosting': MultiOutputRegressor(GradientBoostingRegressor(...)),
-       'XGBoost': MultiOutputRegressor(XGBRegressor(...))
-   }
-   ```
-
-5. **Selección del mejor modelo**
-   ```python
-   mejor_modelo = max(resultados, key=lambda k: resultados[k]['r2_test'])
-   ```
-
-6. **Serialización**
-   ```python
-   with open('modelo_prediccion.pkl', 'wb') as f:
-       pickle.dump({
-           'modelo': mejor_modelo,
-           'scaler_X': scaler_X,
-           'scaler_y': scaler_y,
-           'metricas': {...}
-       }, f)
-   ```
-
-### API de Predicción
-
-Para ejemplos detallados de uso de todas las APIs, consultar el documento **`API_DOCUMENTATION.md`**.
+- `usuarios` 1 ─ N `movimientos` (quién hizo el cambio de stock)
+- `Insumos` 1 ─ N `movimientos` (qué insumo se movió)
+- `Insumos` 1 ─ N `Receta_Detalle` (qué insumos forman cada diseño)
+- `Disenos_Mezcla` 1 ─ N `Receta_Detalle`
+- `Disenos_Mezcla` 1 ─ N `Produccion_Diaria`
+- `Zonas` / `Centros_Costo` / `Turnos` 1 ─ N `Produccion_Diaria`
+- `Produccion_Diaria` 1 ─ N `Produccion_Insumos` (consumos reales del despacho)
+- `Insumos` 1 ─ N `Produccion_Insumos`
 
 ---
 
-## 📊 Ejemplo de Búsqueda con Estructuras de Datos
+## Instalación y configuración inicial
 
-```python
-from ed.busquedas import buscar_por_rango
+### Requisitos previos
 
-# Búsqueda con BST y AVL (comparación automática)
-resultados, tiempo_bst, tiempo_avl = buscar_por_rango('2025-01-01', '2025-12-31')
+- Python 3.10 o superior
+- Acceso al archivo `data/raw/Batch_Plant_Production_2025.xlsm` (incluido en el
+  repositorio) para la migración histórica
 
-print(f"BST: {len(resultados)} registros en {tiempo_bst*1000:.4f}ms")
-print(f"AVL: {len(resultados)} registros en {tiempo_avl*1000:.4f}ms")
-```
+### 1. Crear y activar un entorno virtual
 
-**Salida típica**:
-```
-Búsqueda '2025-01-01' a '2025-12-31':
-  BST: 1250 registros en 2.3451ms (0.002345s)
-  AVL: 1250 registros en 1.8762ms (0.001876s)
-```
-
----
-
-## 📝 Documentación de APIs
-
-Para documentación detallada de todos los endpoints, consultar:
-
-**`API_DOCUMENTATION.md`**
-
-Incluye:
-- Especificación completa de cada endpoint
-- Parámetros requeridos y opcionales
-- Ejemplos de request/response
-- Códigos de estado HTTP
-- Ejemplos con cURL y Python
-
----
-
-## 🧪 Testing
-
-### Probar el Modelo de ML
 ```bash
-python ml/MLPFuture.py
+python -m venv .venv
+source .venv/bin/activate          # Linux / macOS
+# .venv\Scripts\activate           # Windows
 ```
 
-Verifica:
-- ✅ R² > 0.90 (alta precisión)
-- ✅ RMSE razonable según escala de datos
-- ✅ Gráficas generadas en `ml/graficas/`
+### 2. Instalar dependencias
 
-### Probar Búsquedas
 ```bash
-python -c "from ed.busquedas import buscar_por_rango; buscar_por_rango('2025-01-01', '2025-12-31')"
+pip install -r requirements.txt
 ```
 
-### Probar API
+### 3. Configurar variables de entorno
+
+Crea un archivo `.env` en la raíz del proyecto (no se versiona):
+
+```env
+SECRET_KEY=cambia-esto-por-una-clave-larga-y-aleatoria
+DB_PATH=db/gestion_materiales.db
+```
+
+> Si `SECRET_KEY` no está definida, `app.py` lanza un `RuntimeError` al arrancar.
+
+### 4. Crear la base de datos y cargar datos
+
+Ejecuta los scripts en orden. El paso 3 solo es necesario si quieres migrar el
+histórico desde el Excel:
+
 ```bash
-# Iniciar servidor
+# Paso 1 — Crear esquema (11 tablas en 3FN)
+python db/01_crear_esquema.py
+
+# Paso 2 — Poblar insumos base + usuarios demo
+python db/02_poblar_insumos.py
+
+# Paso 3 (opcional) — Migrar despachos históricos desde el Excel
+python db/03_cargar_datos_iniciales.py
+```
+
+> ⚠️ `db/01_crear_esquema.py` tiene el flag `PERMITIR_RECREAR_DB = True`, que **borra**
+> la base de datos existente antes de recrear. Cámbialo a `False` si quieres preservar
+> datos entre ejecuciones.
+
+### 5. (Alternativa) Resetear usuarios demo
+
+Si necesitas recrear los usuarios demo con contraseñas que cumplen la política de
+complejidad (letra + número + símbolo), ejecuta:
+
+```bash
+python scripts/crear_usuarios.py
+```
+
+Esto reemplaza los usuarios creados por `02_poblar_insumos.py` por las siguientes
+credenciales:
+
+| Usuario   | Contraseña   | Rol           |
+|-----------|--------------|---------------|
+| `admin`   | `Admin123!`  | Admin         |
+| `operador`| `Operador123!` | Operador    |
+| `visor`   | `Visor123!`  | Visualizador  |
+
+> ⚠️ Cambia estas contraseñas antes de cualquier despliegue real.
+
+---
+
+## Uso del sistema
+
+### Iniciar el servidor
+
+```bash
 python app.py
-
-# En otra terminal
-curl http://localhost:5000/api/dashboard
 ```
+
+La aplicación queda disponible en `http://localhost:5000`.
+
+### Páginas web
+
+| Ruta          | Rol mínimo        | Descripción                                              |
+|---------------|-------------------|----------------------------------------------------------|
+| `/login`      | (público)         | Formulario de inicio de sesión                           |
+| `/dashboard`  | Cualquier usuario | KPIs, registros recientes, alertas de inventario         |
+| `/registro`   | Admin / Operador  | Alta de despachos con cruce consumo vs stock              |
+| `/inventario` | Admin             | Gestión de materiales (alta, edición de stock y márgenes) |
+| `/historial`  | Admin / Operador  | Búsqueda filtrable de despachos + resumen + alertas       |
+| `/usuarios`   | Admin             | Alta y listado de usuarios del sistema                   |
+| `/logout`     | —                 | Cierra sesión y vuelve al login                           |
+
+### API REST
+
+El sistema expone **17 rutas** (HTML + JSON). Para el listado completo con métodos,
+parámetros, ejemplos de request/response y códigos HTTP, consulta
+[`docs/API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md).
+
+Resumen rápido:
+
+| Endpoint                        | Método        | Rol                |
+|---------------------------------|---------------|--------------------|
+| `/api/login`                    | POST          | (público)          |
+| `/api/csrf-token`               | GET           | Cualquier usuario  |
+| `/api/dashboard`                | GET           | Cualquier usuario  |
+| `/api/recetas`                  | GET           | Cualquier usuario  |
+| `/api/zonas`                    | GET           | Cualquier usuario  |
+| `/api/despachos`                | GET, POST     | Admin / Operador   |
+| `/api/historial_consumo`        | GET           | Admin / Operador   |
+| `/api/resumen_consumo`          | GET           | Admin / Operador   |
+| `/api/alertas_consumo`          | GET           | Cualquier usuario  |
+| `/api/cruce_consumo_registro`   | POST          | Admin / Operador   |
+| `/api/materiales`               | GET, POST     | Admin              |
+| `/api/usuarios`                 | GET, POST     | Admin              |
+| `/logout`                       | GET           | (público)          |
+
+> Todas las rutas `/api/*` (excepto `/api/login`) requieren sesión activa y rol
+> apropiado. Los POST deben incluir el header `X-CSRFToken`.
 
 ---
 
-## 🐛 Solución de Problemas
+## Autenticación y roles
 
-### Error: "Modelo no encontrado"
-**Causa**: No se ejecutó `ml/MLPFuture.py`
+### Roles disponibles
 
-**Solución**:
+| Rol            | Descripción                                                                                       |
+|----------------|---------------------------------------------------------------------------------------------------|
+| `Admin`        | Acceso total: ver, crear, editar y eliminar cualquier dato, incluidos usuarios e inventario.      |
+| `Operador`     | Registrar y consultar despachos, ver dashboard e historial. No gestiona usuarios ni inventario.   |
+| `Visualizador` | Solo dashboard y consultas de solo lectura (KPIs, alertas, recetas, zonas).                       |
+
+### Decoradores disponibles (`auth/roles.py`)
+
+- `@solo_admin` — solo `Admin`.
+- `@admin_u_operador` — `Admin` o `Operador`.
+- `@cualquier_usuario` — cualquier usuario autenticado.
+- `@rol_requerido(*roles)` — para roles personalizados.
+
+Cada denegación se registra en `seguridad.log` con el usuario, la IP y la ruta
+solicitada.
+
+### Política de contraseñas
+
+- Longitud máxima: **128 caracteres** (para evitar abuso de hashing).
+- Debe contener al menos **una letra, un número y un símbolo**.
+- El username no puede exceder **50 caracteres** y debe ser único (case-insensitive).
+- Las contraseñas se almacenan con `pbkdf2:sha256` (Werkzeug) — nunca en texto plano.
+
+### Bloqueo anti-fuerza-bruta
+
+- Después de **5 intentos fallidos** para el mismo `username@ip`, la cuenta queda
+  bloqueada **24 horas** (`BLOQUEO_SEGUNDOS = 24 * 60 * 60` en `auth/login.py`).
+- El bloqueo se persiste en la tabla `intentos_login`, así que **sobrevive reinicios**
+  del servidor.
+- En paralelo, `/api/login` está limitado por `flask-limiter` a **5 peticiones por
+  minuto** por IP.
+
+### Timeout de inactividad
+
+- Tras **15 minutos** sin actividad (`INACTIVIDAD_MAX_SEGUNDOS = 15 * 60` en `app.py`),
+  la sesión se cierra automáticamente en el siguiente request.
+
+---
+
+## Seguridad implementada
+
+Resumen de las **18 medidas** activas en el proyecto (detalle completo en
+[`docs/seguridad_implementada.md`](docs/seguridad_implementada.md)):
+
+1. Hashing de contraseñas con Werkzeug (`pbkdf2:sha256`).
+2. Longitud máxima de contraseña (128 caracteres).
+3. Política de complejidad (letra + número + símbolo).
+4. `SECRET_KEY` desde variables de entorno (sin hardcoded).
+5. Cookie de sesión endurecida (`HttpOnly`, `SameSite=Lax`, nombre `ph_session`).
+6. Timeout de inactividad de 15 minutos.
+7. Rate limiting en `/api/login` (5/min).
+8. Bloqueo persistente de 24 horas tras 5 intentos fallidos.
+9. Control de acceso por roles (Admin / Operador / Visualizador).
+10. Protección CSRF global con Flask-WTF.
+11. Headers de seguridad (`X-Frame-Options`, `X-Content-Type-Options`,
+    `X-XSS-Protection`, `Referrer-Policy`) + `Cache-Control: no-store` en rutas
+    protegidas.
+12. Prevención de SQL injection: consultas parametrizadas y whitelist de tablas en
+    `PRAGMA table_info`.
+13. Validación de entradas (fecha ISO, números no negativos, rangos, unidades, usernames
+    únicos case-insensitive).
+14. Logging de seguridad dedicado (`seguridad.log`).
+15. Mensajes de error genéricos al cliente; trazas solo en logs.
+16. Ruta de base de datos configurable por entorno (`DB_PATH`).
+17. No exposición de datos sensibles: `listar_usuarios` nunca devuelve `password_hash`.
+18. Pista de auditoría: todo cambio de stock queda en `movimientos` con `usuario_id`,
+    `cantidad`, `fecha` y `tipo`.
+
+---
+
+## Documentación adicional
+
+- [`docs/API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md) — Referencia completa de la
+  API REST con ejemplos en cURL y JSON.
+- [`docs/seguridad_implementada.md`](docs/seguridad_implementada.md) — Detalle de las
+  18 medidas de seguridad implementadas.
+- [`docs/diagrama_relacional_original.mermaid`](docs/diagrama_relacional_original.mermaid)
+  — Diseño inicial desnormalizado (1FN, histórico).
+- [`docs/diagrama_relacional_2FN.mermaid`](docs/diagrama_relacional_2FN.mermaid)
+  — Estado intermedio 2FN (catálogos separados, receta aún plana).
+- [`docs/diagrama_relacional_3FN.mermaid`](docs/diagrama_relacional_3FN.mermaid)
+  — Esquema final implementado con las 11 tablas.
+
+---
+
+## Solución de problemas
+
+### `RuntimeError: SECRET_KEY no definida`
+
+Falta la variable de entorno. Crea un archivo `.env` en la raíz con
+`SECRET_KEY=<valor>` y reinicia el servidor.
+
+### `sqlite3.OperationalError: no such table: ...`
+
+No se ejecutó el esquema. Corre:
+
 ```bash
-python ml/MLPFuture.py
+python db/01_crear_esquema.py
+python db/02_poblar_insumos.py
 ```
 
-### Error: "No such table: despachos"
-**Causa**: No se creó la base de datos
+### El bloqueo de login no se libera tras 24 horas
 
-**Solución**:
+El campo `bloqueado_hasta` es un timestamp unix. Para forzar el desbloqueo, ejecuta
+directamente contra la base de datos:
+
 ```bash
-python database/01_crear_esquema.py
-python database/02_datos_base.py
-python database/03_cargar_datos_iniciales.py
+sqlite3 db/gestion_materiales.db "DELETE FROM intentos_login WHERE clave='usuario@1.2.3.4';"
 ```
 
-### Error: "FileNotFoundError: DatosLimpios.csv"
-**Causa**: No se ejecutó el script de limpieza
+### El frontend muestra "Token CSRF inválido"
 
-**Solución**:
+El token caduca con la sesión. Recarga la página o llama `GET /api/csrf-token` para
+obtener uno nuevo antes del próximo POST.
+
+### Quiero recrear la base de datos desde cero
+
 ```bash
-python ml/LimpiezaDatos.py
-```
-
-### Error: Inventario vacío o materiales faltantes
-**Causa**: No se ejecutó `poblar_materiales.py`
-
-**Solución**:
-```bash
-python database/poblar_materiales.py
-```
-Responder 's' cuando pregunte.
-
-### Error: Recursión excedida en árboles
-**Causa**: Árbol muy grande
-
-**Solución**: Ya configurado en `busquedas.py`:
-```python
-import sys
-sys.setrecursionlimit(10000)
+rm db/gestion_materiales.db
+python db/01_crear_esquema.py
+python db/02_poblar_insumos.py
+python db/03_cargar_datos_iniciales.py   # opcional, si quieres el histórico
 ```
 
 ---
 
-## 📄 Licencia
+## Licencia
 
-Este proyecto es de uso académico para el curso de Estructuras de Datos y Machine Learning.
-
----
-
-## 👥 Equipo de Desarrollo
-
-- **Frontend**: HTML/CSS
-- **JavaScript**: Integración y lógica de cliente
-- **Backend**: Flask y Estructuras de Datos
-- **Database**: SQLite y migraciones
-- **Machine Learning**: Modelos predictivos
-
----
-
-## 📚 Referencias
-
-- [Documentación Flask](https://flask.palletsprojects.com/)
-- [Scikit-learn](https://scikit-learn.org/)
-- [Plotly Python](https://plotly.com/python/)
-- [XGBoost](https://xgboost.readthedocs.io/)
-
----
-
-## 🔮 Roadmap Futuro
-
-- [ ] Implementación de autenticación de usuarios
-- [ ] Dashboard de administración de roles
-- [ ] Exportación de reportes a PDF
-- [ ] Sistema de alertas automáticas por email
-- [ ] Integración con proveedores externos
-- [ ] App móvil para registro de despachos
-- [ ] Modelos LSTM para series de tiempo
-- [ ] API GraphQL
-
----
+Proyecto académico para el curso de Estructuras de Datos y Bases de Datos. Uso interno.
