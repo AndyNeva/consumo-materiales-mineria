@@ -99,7 +99,7 @@ def agregar_headers_seguridad(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    rutas_protegidas = ("/dashboard", "/registro", "/inventario", "/historial", "/ml")
+    rutas_protegidas = ("/dashboard", "/registro", "/inventario", "/historial", "/usuarios")
     if request.path in rutas_protegidas or request.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
