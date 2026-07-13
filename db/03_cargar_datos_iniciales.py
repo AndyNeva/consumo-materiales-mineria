@@ -5,7 +5,7 @@ from utilidades import limpiar_numero
 
 #Configuración
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
+DB_PATH = os.getenv("DB_PATH", os.path.join(BASE_DIR, "db", "gestion_materiales.db"))
 EXCEL_PATH = os.path.join(BASE_DIR, "data", "raw", "Batch_Plant_Production_2025.xlsm")
 
 def obtener_o_crear_zona(cursor, nombre_zona):

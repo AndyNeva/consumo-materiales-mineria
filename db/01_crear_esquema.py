@@ -7,8 +7,7 @@ PERMITIR_RECREAR_DB = True
 
 # Configuración de rutas
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
+DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "gestion_materiales.db"))
 
 def crear_esquema():
     """Crea el esquema completo de la base de datos"""

@@ -7,8 +7,7 @@ import sys
 # hashear_password falla y el login se rompe.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, "db", "gestion_materiales.db")
+DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "gestion_materiales.db"))
 
 # Import real de hashear_password (sin fallback que guarde texto plano).
 # Si este import falla, preferimos que el script aborte a guardar
