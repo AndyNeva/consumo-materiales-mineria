@@ -138,6 +138,12 @@ async function guardarUsuario(event){
     return;
   }
 
+  const cedulaRepetida = usuarios.some(u => String(u.cedula || "").trim() === cedula);
+  if(cedulaRepetida){
+    setStatus("formStatus", "Ya existe un usuario registrado con esa cédula.", "err-text");
+    return;
+  }
+
   if(!validacion.ok){
     setStatus("formStatus", "La contraseña debe contener al menos una letra, un número y un símbolo.", "err-text");
     return;

@@ -111,6 +111,18 @@ def usuario_existe(username: str, ruta_bd: str | None = None) -> bool:
         return cursor.fetchone() is not None
 
 
+def cedula_existe(cedula: str, ruta_bd: str | None = None) -> bool:
+    """Valida que la cedula no este ya registrada por otro usuario."""
+    cedula = (cedula or "").strip()
+    if not cedula:
+        return False
+    with _abrir_conexion(ruta_bd) as conexion:
+        asegurar_tabla_usuarios(conexion)
+        cursor = conexion.cursor()
+        cursor.execute("SELECT id FROM usuarios WHERE cedula = ? LIMIT 1", (cedula,))
+        return cursor.fetchone() is not None
+
+
 def listar_usuarios(ruta_bd: str | None = None) -> list[dict[str, Any]]:
     """Lista usuarios sin exponer el hash de la contrasena."""
     with _abrir_conexion(ruta_bd) as conexion:
@@ -142,6 +154,10 @@ def crear_usuario(
         if cursor.fetchone():
             return {"ok": False, "error": "Ya existe un usuario con ese nombre.", "status": 409}
 
+        cursor.execute("SELECT id FROM usuarios WHERE cedula = ? LIMIT 1", (cedula,))
+        if cursor.fetchone():
+            return {"ok": False, "error": "Ya existe un usuario registrado con esa cédula.", "status": 409}
+
         try:
             password_hash = hashear_password(password)
             cursor.execute(
@@ -149,7 +165,10 @@ def crear_usuario(
                 (username, rol, password_hash, cedula),
             )
             conexion.commit()
-        except sqlite3.IntegrityError:
+        except sqlite3.IntegrityError as error:
+            mensaje = str(error).lower()
+            if "cedula" in mensaje:
+                return {"ok": False, "error": "Ya existe un usuario registrado con esa cédula.", "status": 409}
             return {"ok": False, "error": "Ya existe un usuario con ese nombre.", "status": 409}
 
         return {
