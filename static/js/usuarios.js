@@ -40,6 +40,31 @@ function actualizarChecks(){
   return validacion;
 }
 
+// Validación local de cédula (formato + bloqueo de patrones triviales).
+// Espejo de utils/validaciones.py; el servidor vuelve a validar siempre.
+function validarCedulaLocal(cedula){
+  if(!/^\d{10}$/.test(cedula)) return false;
+
+  if (/^(\d)\1{9}$/.test(cedula)) return false;
+  if (cedula === "0123456789" || cedula === "1234567890") return false;
+
+  const tercerDigito = parseInt(cedula[2], 10);
+  if (tercerDigito > 6) return false;
+
+  const provincia = parseInt(cedula.slice(0, 2), 10);
+  if (provincia < 1 || provincia > 24) return false;
+
+  const coeficientes = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+  let suma = 0;
+  for (let i = 0; i < coeficientes.length; i++) {
+    const valor = coeficientes[i] * parseInt(cedula[i], 10);
+    suma += valor > 9 ? valor - 9 : valor;
+  }
+  const residuo = suma % 10;
+  const verificadorObtenido = residuo !== 0 ? 10 - residuo : 0;
+  return verificadorObtenido === parseInt(cedula[9], 10);
+}
+
 async function obtenerCsrfToken(){
   const res = await fetch("/api/csrf-token");
   const json = await res.json().catch(() => ({}));
@@ -72,7 +97,7 @@ function renderUsuarios(){
   tb.innerHTML = "";
 
   if(!usuarios.length){
-    tb.innerHTML = `<tr><td colspan="3" class="empty">Sin usuarios registrados.</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="4" class="empty">Sin usuarios registrados.</td></tr>`;
     return;
   }
 
@@ -81,6 +106,7 @@ function renderUsuarios(){
       <tr>
         <td>${escapeHtml(usuario.id)}</td>
         <td>${escapeHtml(usuario.username)}</td>
+        <td>${escapeHtml(usuario.cedula || "—")}</td>
         <td><span class="badge">${escapeHtml(usuario.rol)}</span></td>
       </tr>
     `);
@@ -91,6 +117,7 @@ async function guardarUsuario(event){
   event.preventDefault();
 
   const username = $("username").value.trim();
+  const cedula = $("cedula").value.trim();
   const password = $("password").value;
   const rol = $("rol").value;
   const validacion = actualizarChecks();
@@ -103,6 +130,11 @@ async function guardarUsuario(event){
   const repetido = usuarios.some(u => String(u.username || "").toLowerCase() === username.toLowerCase());
   if(repetido){
     setStatus("formStatus", "Ya existe un usuario con ese nombre.", "err-text");
+    return;
+  }
+
+  if(!validarCedulaLocal(cedula)){
+    setStatus("formStatus", "La cédula ingresada no es válida.", "err-text");
     return;
   }
 
@@ -120,7 +152,7 @@ async function guardarUsuario(event){
         "Content-Type":"application/json",
         "X-CSRFToken": csrfToken,
       },
-      body:JSON.stringify({ username, password, rol })
+      body:JSON.stringify({ username, password, rol, cedula })
     });
     const json = await res.json().catch(() => ({}));
 

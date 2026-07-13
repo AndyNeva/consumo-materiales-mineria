@@ -35,7 +35,8 @@ def crear_esquema():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
             rol TEXT,
-            password_hash TEXT
+            password_hash TEXT,
+            cedula TEXT
         )
     ''')
 

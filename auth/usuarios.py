@@ -4,6 +4,7 @@ Funciones para gestion de usuarios del sistema.
 Incluye validaciones para crear usuarios desde la pantalla de administracion:
 - usuario obligatorio y no repetido;
 - contrasena con letras, numeros y simbolos;
+- cedula con formato valido (checksum + bloqueo de patrones triviales);
 - rol dentro de los roles permitidos.
 """
 
@@ -15,6 +16,7 @@ from typing import Any
 from auth.login import MAX_LARGO_PASSWORD, hashear_password
 from auth.roles import ROLES_VALIDOS
 from utils.db import conectar
+from utils.validaciones import validar_cedula
 
 
 MAX_LARGO_USERNAME = 50
@@ -26,7 +28,7 @@ def _abrir_conexion(ruta_bd: str | None = None):
 
 
 def asegurar_tabla_usuarios(conexion: sqlite3.Connection) -> None:
-    """Crea o ajusta la tabla usuarios para soportar contrasenas hasheadas."""
+    """Crea o ajusta la tabla usuarios para soportar contrasenas hasheadas y cedula."""
     cursor = conexion.cursor()
     cursor.execute(
         """
@@ -44,6 +46,9 @@ def asegurar_tabla_usuarios(conexion: sqlite3.Connection) -> None:
 
     if "password_hash" not in columnas:
         cursor.execute("ALTER TABLE usuarios ADD COLUMN password_hash TEXT")
+
+    if "cedula" not in columnas:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN cedula TEXT")
 
 
 def validar_password(password: str) -> list[str]:
@@ -70,10 +75,13 @@ def validar_password(password: str) -> list[str]:
     return errores
 
 
-def validar_datos_usuario(username: str, password: str, rol: str) -> tuple[str, str, str, list[str]]:
+def validar_datos_usuario(
+    username: str, password: str, rol: str, cedula: str = ""
+) -> tuple[str, str, str, str, list[str]]:
     """Normaliza y valida los campos principales de usuario."""
     username = (username or "").strip()
     rol = (rol or "").strip()
+    cedula = (cedula or "").strip()
     errores: list[str] = []
 
     if not username:
@@ -84,9 +92,14 @@ def validar_datos_usuario(username: str, password: str, rol: str) -> tuple[str, 
     if rol not in ROLES_VALIDOS:
         errores.append("El rol seleccionado no es válido.")
 
+    if not cedula:
+        errores.append("La cédula es obligatoria.")
+    elif not validar_cedula(cedula):
+        errores.append("La cédula ingresada no es válida.")
+
     errores.extend(validar_password(password))
 
-    return username, password or "", rol, errores
+    return username, password or "", rol, cedula, errores
 
 
 def usuario_existe(username: str, ruta_bd: str | None = None) -> bool:
@@ -105,7 +118,7 @@ def listar_usuarios(ruta_bd: str | None = None) -> list[dict[str, Any]]:
         cursor = conexion.cursor()
         cursor.execute(
             """
-            SELECT id, username, rol
+            SELECT id, username, rol, cedula
             FROM usuarios
             ORDER BY LOWER(username)
             """
@@ -113,9 +126,11 @@ def listar_usuarios(ruta_bd: str | None = None) -> list[dict[str, Any]]:
         return [dict(fila) for fila in cursor.fetchall()]
 
 
-def crear_usuario(username: str, password: str, rol: str, ruta_bd: str | None = None) -> dict[str, Any]:
+def crear_usuario(
+    username: str, password: str, rol: str, cedula: str = "", ruta_bd: str | None = None
+) -> dict[str, Any]:
     """Crea un usuario nuevo con password hasheada y validacion de duplicados."""
-    username, password, rol, errores = validar_datos_usuario(username, password, rol)
+    username, password, rol, cedula, errores = validar_datos_usuario(username, password, rol, cedula)
     if errores:
         return {"ok": False, "error": " ".join(errores), "status": 400}
 
@@ -130,8 +145,8 @@ def crear_usuario(username: str, password: str, rol: str, ruta_bd: str | None = 
         try:
             password_hash = hashear_password(password)
             cursor.execute(
-                "INSERT INTO usuarios (username, rol, password_hash) VALUES (?, ?, ?)",
-                (username, rol, password_hash),
+                "INSERT INTO usuarios (username, rol, password_hash, cedula) VALUES (?, ?, ?, ?)",
+                (username, rol, password_hash, cedula),
             )
             conexion.commit()
         except sqlite3.IntegrityError:
@@ -143,6 +158,7 @@ def crear_usuario(username: str, password: str, rol: str, ruta_bd: str | None = 
                 "id": cursor.lastrowid,
                 "username": username,
                 "rol": rol,
+                "cedula": cedula,
             },
             "status": 201,
         }

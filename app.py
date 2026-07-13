@@ -159,6 +159,7 @@ def api_usuarios():
             username=datos.get("username", ""),
             password=datos.get("password", ""),
             rol=datos.get("rol", ""),
+            cedula=datos.get("cedula", ""),
             ruta_bd=RUTA_BD,
         )
 
