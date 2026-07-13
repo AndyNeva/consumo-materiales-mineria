@@ -8,3 +8,4 @@ python-dotenv>=1.0
 flask-limiter>=3.5
 flask-wtf>=1.2
 gunicorn>=21.2
+pandas>=2.2.2,<2.3

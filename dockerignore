@@ -12,7 +12,6 @@ seguridad.log
 .git/
 .gitignore
 .vscode/
-data/raw/
 data/processed/
 README.md
 docs/
