@@ -127,9 +127,16 @@ def agregar_headers_seguridad(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    # /login va sin caché: si no, un F5 podría reusar la copia cacheada (con el
-    # formulario habilitado) y parecería que el bloqueo de 24h se reinició.
-    rutas_protegidas = ("/login", "/dashboard", "/registro", "/inventario", "/historial", "/ml")
+    """
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:;"
+)
+    """
+    rutas_protegidas = ("/dashboard", "/registro", "/inventario", "/historial", "/usuarios")
     if request.path in rutas_protegidas or request.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
@@ -214,6 +221,7 @@ def api_usuarios():
             username=datos.get("username", ""),
             password=datos.get("password", ""),
             rol=datos.get("rol", ""),
+            cedula=datos.get("cedula", ""),
             ruta_bd=RUTA_BD,
         )
 
