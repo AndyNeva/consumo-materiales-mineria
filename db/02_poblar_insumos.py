@@ -53,24 +53,27 @@ def poblar_insumos_y_base():
     #      - UPSERT con ON CONFLICT(username) DO UPDATE
     #      - sin INSERT OR REPLACE (que rompería FOREIGN KEYs de movimientos)
     #      - sin fallback a texto plano
+    #    Las cédulas son de demostración: pasan el checksum módulo 10 real
+    #    (utils/validaciones.py), pero no corresponden a personas reales.
     USUARIOS_INICIALES = [
-        ("admin", "admin123", "Admin"),
-        ("operador", "operador123", "Operador"),
-        ("visor", "visor123", "Visualizador"),
+        ("admin", "admin123", "Admin", "1701234567"),
+        ("operador", "operador123", "Operador", "1712345675"),
+        ("visor", "visor123", "Visualizador", "0901234567"),
     ]
 
     print("\nCreando usuarios iniciales...")
-    for username, password, rol in USUARIOS_INICIALES:
+    for username, password, rol, cedula in USUARIOS_INICIALES:
         pw_hash = hashear_password(password)
         cur.execute(
             """
-            INSERT INTO usuarios (username, rol, password_hash)
-            VALUES (?, ?, ?)
+            INSERT INTO usuarios (username, rol, password_hash, cedula)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
                 rol = excluded.rol,
-                password_hash = excluded.password_hash
+                password_hash = excluded.password_hash,
+                cedula = excluded.cedula
             """,
-            (username, rol, pw_hash),
+            (username, rol, pw_hash, cedula),
         )
         print(f"  [OK] Usuario '{username}' listo (rol: {rol})")
 

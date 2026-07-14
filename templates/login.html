@@ -502,11 +502,16 @@ tbody tr:hover{ background: rgba(79,140,255,.06); }
           👁
         </button>
       </div>
+      <div id="loginError" class="alert bad"
+           style="display:{% if bloqueado %}block{% else %}none{% endif %}; margin-top:14px;">{{ mensaje_bloqueo }}</div>
       <div class="row" style="justify-content:flex-end; margin-top:14px;">
-        <button class="btn" type="submit">Ingresar</button>
+        <button class="btn" type="submit" id="btnIngresar"
+          {% if bloqueado %}disabled style="opacity:.55; cursor:not-allowed;"{% endif %}>
+          {% if bloqueado %}Bloqueado{% else %}Ingresar{% endif %}
+        </button>
       </div>
       <div style="margin-top:10px; font-size:12px; color:var(--muted);">
-        
+
       </div>
     </form>
     </div>
@@ -536,11 +541,47 @@ btnTogglePass.addEventListener("click", () => {
 // Login real contra /api/login (Juan Ruiz @eljuandaruiz).
 // Ya no se confía en el cliente: el servidor valida credenciales, rol,
 // intentos fallidos y abre la sesión segura de Flask.
+const cajaError = document.getElementById("loginError");
+const btnIngresar = document.getElementById("btnIngresar");
+
+// el servidor ya nos dice si esta ip viene bloqueada al renderizar la pagina.
+// asi un F5 no "reinicia" nada: el estado real vive en la bd, no en el navegador.
+let bloqueado = {{ 'true' if bloqueado else 'false' }};
+
+function mostrarError(mensaje, esBloqueo){
+  cajaError.textContent = mensaje;
+  cajaError.className = "alert " + (esBloqueo ? "bad" : "warn");
+  cajaError.style.display = "block";
+  // si la cuenta quedo bloqueada 24h no tiene sentido dejar reintentar.
+  if (esBloqueo) {
+    bloqueado = true;
+    btnIngresar.disabled = true;
+    btnIngresar.textContent = "Bloqueado";
+    btnIngresar.style.opacity = ".55";
+    btnIngresar.style.cursor = "not-allowed";
+  }
+}
+
+// al volver "atras" el navegador puede restaurar el DOM desde la bfcache sin
+// recargar, lo que devolveria el boton habilitado. revalidamos contra el server.
+window.addEventListener("pageshow", async (e) => {
+  if (!e.persisted) return;
+  try {
+    const r = await fetch("/api/estado_bloqueo", { cache: "no-store" });
+    const d = await r.json();
+    if (d.bloqueado) mostrarError(d.error, true);
+  } catch (_) { /* si falla, el servidor igual rechaza el login */ }
+});
+
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (bloqueado) return;
+
   const usuario = document.getElementById("u").value.trim();
   const pass = document.getElementById("p").value;
-  if(!usuario || !pass){ alert("Ingresa usuario y contraseña."); return; }
+  if(!usuario || !pass){ mostrarError("Ingresa usuario y contraseña.", false); return; }
+
+  cajaError.style.display = "none";
 
   try {
     const resp = await fetch("/api/login", {
@@ -551,7 +592,8 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     const data = await resp.json();
 
     if (!resp.ok || !data.ok) {
-      alert(data.error || "No se pudo iniciar sesión.");
+      // 423 = cuenta bloqueada por 24h tras 5 intentos fallidos.
+      mostrarError(data.error || "No se pudo iniciar sesión.", resp.status === 423);
       return;
     }
 
@@ -560,7 +602,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     sessionStorage.setItem("ph_active_tab", "1");
     window.location.href = "/dashboard";
   } catch (err) {
-    alert("Error de conexión con el servidor.");
+    mostrarError("Error de conexión con el servidor.", false);
   }
 });
 

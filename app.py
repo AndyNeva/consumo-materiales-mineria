@@ -10,7 +10,7 @@ from flask_limiter.util import get_remote_address
 from flask_wtf import CSRFProtect
 from flask_wtf.csrf import generate_csrf
 from auth.roles import cualquier_usuario, solo_admin, admin_u_operador
-from auth.login import autenticar
+from auth.login import autenticar, estado_bloqueo_ip, mensaje_bloqueo
 from auth.usuarios import crear_usuario, listar_usuarios
 from utils.db import conectar, RUTA_BD
 from utils.logging_seguridad import configurar_logging, logger_seguridad
@@ -42,8 +42,36 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
+@app.errorhandler(429)
+def demasiadas_peticiones(e):
+    """Devuelve JSON (no el HTML por defecto) cuando salta el rate limiter."""
+    return jsonify({
+        "ok": False,
+        "error": "Demasiadas peticiones seguidas. Espera un momento e intenta de nuevo.",
+    }), 429
+
 # ===== Logging centralizado =====
 configurar_logging()
+
+# la tabla de intentos debe existir siempre, si no el bloqueo de 24h falla en
+# silencio (p. ej. en un despliegue nuevo donde nadie corrio el script).
+def asegurar_tabla_intentos():
+    try:
+        with conectar() as conexion:
+            conexion.execute(
+                """
+                CREATE TABLE IF NOT EXISTS intentos_login (
+                    clave TEXT PRIMARY KEY,
+                    intentos INTEGER NOT NULL DEFAULT 0,
+                    bloqueado_hasta REAL NOT NULL DEFAULT 0
+                )
+                """
+            )
+            conexion.commit()
+    except Exception:
+        logging.exception("No se pudo asegurar la tabla intentos_login")
+
+asegurar_tabla_intentos()
 
 # Mensaje genérico reutilizable
 MSG_ERROR_GENERICO = "Ocurrió un error al procesar la solicitud. Intenta de nuevo más tarde."
@@ -99,7 +127,16 @@ def agregar_headers_seguridad(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    rutas_protegidas = ("/dashboard", "/registro", "/inventario", "/historial", "/ml")
+    """
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:;"
+)
+    """
+    rutas_protegidas = ("/dashboard", "/registro", "/inventario", "/historial", "/usuarios")
     if request.path in rutas_protegidas or request.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
@@ -113,7 +150,32 @@ def home():
 
 @app.route("/login")
 def login():
-    return render_template("login.html")
+    """
+    Pinta el login. Si la IP ya está bloqueada por fuerza bruta, la plantilla
+    se renderiza con el formulario deshabilitado desde el servidor.
+
+    Esto es lo que evita que un F5 "reinicie" el bloqueo: el estado no vive en
+    el navegador, se vuelve a leer de la BD en cada carga de la página.
+    """
+    bloqueado, restante = estado_bloqueo_ip(get_remote_address())
+    return render_template(
+        "login.html",
+        bloqueado=bloqueado,
+        mensaje_bloqueo=mensaje_bloqueo(restante) if bloqueado else "",
+        segundos_restantes=restante,
+    )
+
+
+@app.route("/api/estado_bloqueo")
+@csrf.exempt
+def api_estado_bloqueo():
+    """Estado de bloqueo de la IP actual (lo consulta el login al cargar)."""
+    bloqueado, restante = estado_bloqueo_ip(get_remote_address())
+    return jsonify({
+        "bloqueado": bloqueado,
+        "segundos_restantes": restante,
+        "error": mensaje_bloqueo(restante) if bloqueado else "",
+    })
 
 @app.route("/dashboard")
 @cualquier_usuario
@@ -159,6 +221,7 @@ def api_usuarios():
             username=datos.get("username", ""),
             password=datos.get("password", ""),
             rol=datos.get("rol", ""),
+            cedula=datos.get("cedula", ""),
             ruta_bd=RUTA_BD,
         )
 
@@ -570,7 +633,11 @@ def api_cruce_consumo_registro():
 # ===== API LOGIN =====
 @app.route("/api/login", methods=["POST"])
 @csrf.exempt
-@limiter.limit("5 per minute")
+# el limite por minuto es solo un freno anti-flood; la defensa real contra
+# fuerza bruta es el bloqueo de 24h en auth/login.py. lo dejamos por encima de
+# MAX_INTENTOS (5) para que el usuario alcance a ver el mensaje de bloqueo en
+# vez de chocar antes con un 429 del rate limiter.
+@limiter.limit("20 per minute")
 def api_login():
     """
     Autentica al usuario y abre sesión.
