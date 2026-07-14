@@ -447,8 +447,12 @@ def api_materiales():
             stock_minimo = numero_no_negativo(datos.get("stock_minimo", 0), "Stock mínimo")
             stock_maximo = numero_no_negativo(datos.get("stock_maximo", 0), "Stock máximo")
 
-            if stock_maximo and stock_maximo < stock_minimo:
-                return jsonify({"ok": False, "error": "El stock máximo no puede ser menor que el mínimo"}), 400
+            if stock_minimo <= 0:
+                return jsonify({"ok": False, "error": "El stock mínimo debe ser mayor a 0"}), 400
+            if stock_maximo <= 0:
+                return jsonify({"ok": False, "error": "El stock máximo debe ser mayor a 0"}), 400
+            if stock_maximo <= stock_minimo:
+                return jsonify({"ok": False, "error": "El stock máximo debe ser mayor que el mínimo"}), 400
 
             nuevo_id = agregar_material(
                 nombre=nombre,
@@ -474,11 +478,15 @@ def api_materiales():
             stock_actual = numero_no_negativo(stock_actual, "Stock actual")
         if stock_minimo is not None:
             stock_minimo = numero_no_negativo(stock_minimo, "Stock mínimo")
+            if stock_minimo <= 0:
+                return jsonify({"ok": False, "error": "El stock mínimo debe ser mayor a 0"}), 400
         if stock_maximo is not None:
             stock_maximo = numero_no_negativo(stock_maximo, "Stock máximo")
+            if stock_maximo <= 0:
+                return jsonify({"ok": False, "error": "El stock máximo debe ser mayor a 0"}), 400
 
-        if stock_minimo is not None and stock_maximo is not None and stock_maximo and stock_maximo < stock_minimo:
-            return jsonify({"ok": False, "error": "El stock máximo no puede ser menor que el mínimo"}), 400
+        if stock_minimo is not None and stock_maximo is not None and stock_maximo <= stock_minimo:
+            return jsonify({"ok": False, "error": "El stock máximo debe ser mayor que el mínimo"}), 400
 
         actualizado = actualizar_material(
             material_id=material_id,
@@ -505,8 +513,7 @@ def api_materiales():
             return jsonify({"ok": False, "error": "Ya existe un material con ese nombre"}), 409
         logging.exception("Error en POST /api/materiales")
         return jsonify({"ok": False, "error": mensaje}), 500
-
-
+    
 # ===== API RESUMEN CONSUMO =====
 
 @app.route("/api/resumen_consumo")
