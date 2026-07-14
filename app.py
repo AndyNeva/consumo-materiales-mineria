@@ -99,6 +99,7 @@ def agregar_headers_seguridad(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    """
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
     "default-src 'self'; "
@@ -106,6 +107,7 @@ def agregar_headers_seguridad(response):
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:;"
 )
+    """
     rutas_protegidas = ("/dashboard", "/registro", "/inventario", "/historial", "/usuarios")
     if request.path in rutas_protegidas or request.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
