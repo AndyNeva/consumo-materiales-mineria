@@ -1,10 +1,13 @@
 import sqlite3
-from db import RUTA_BD
+import os
+
+DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "gestion_materiales.db"))
+
 
 TABLA = "intentos_login"
 
 def borrar_entrada():
-    conn = sqlite3.connect(RUTA_BD)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     clave = input("Ingresa la clave a borrar: ").strip()
