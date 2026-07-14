@@ -103,13 +103,16 @@ def esta_bloqueado(username: str, ip: str) -> tuple[bool, int]:
     return False, 0
 
 
-def _registrar_fallo(username: str, ip: str) -> None:
+def _registrar_fallo(username: str, ip: str) -> tuple[int, bool]:
     """
     suma un intento fallido en la bd y activa el bloqueo si se pasa del limite.
 
     usa upsert parametrizado: si la clave ya existe suma 1 al contador, si no
     crea la fila. cuando los intentos llegan a MAX_INTENTOS se fija
     bloqueado_hasta = ahora + BLOQUEO_SEGUNDOS (24 horas).
+
+    Returns:
+        (intentos_acumulados, se_acaba_de_bloquear)
     """
     clave = _clave_intentos(username, ip)
     bloqueo = time.time() + BLOQUEO_SEGUNDOS
@@ -136,6 +139,62 @@ def _registrar_fallo(username: str, ip: str) -> None:
             (bloqueo, clave, MAX_INTENTOS),
         )
         conexion.commit()
+
+        cursor.execute(
+            "SELECT intentos, bloqueado_hasta FROM intentos_login WHERE clave = ?",
+            (clave,),
+        )
+        fila = cursor.fetchone()
+
+    intentos = int(fila["intentos"]) if fila else 0
+    bloqueado_ahora = bool(fila and fila["bloqueado_hasta"] > time.time())
+    return intentos, bloqueado_ahora
+
+
+def mensaje_bloqueo(restante: int) -> str:
+    """mensaje unico de bloqueo, expresado en horas (el bloqueo es de 24h)."""
+    horas = max(1, -(-restante // 3600))  # redondeo hacia arriba
+    return (
+        "Cuenta bloqueada por 24 horas tras "
+        f"{MAX_INTENTOS} intentos fallidos. "
+        f"Inténtalo de nuevo en ~{horas} h."
+    )
+
+
+def estado_bloqueo_ip(ip: str) -> tuple[bool, int]:
+    """
+    dice si hay algun bloqueo activo desde esta ip, sin saber el usuario.
+
+    la usa el login al cargar la pagina: si el navegador recarga (F5) el
+    formulario se dibuja limpio y el usuario cree que el contador se reinicio.
+    consultando esto al arrancar la pagina el bloqueo se pinta de una.
+
+    como la clave es 'usuario@ip', aqui buscamos el bloqueo mas largo que siga
+    vigente para esa ip (LIKE parametrizado sobre el sufijo).
+
+    Returns:
+        (bloqueado, segundos_restantes)
+    """
+    sufijo = f"%@{ip or 'desconocida'}"
+    ahora = time.time()
+
+    with conectar() as conexion:
+        cursor = conexion.cursor()
+        cursor.execute(
+            """
+            SELECT MAX(bloqueado_hasta) AS hasta
+            FROM intentos_login
+            WHERE clave LIKE ? AND bloqueado_hasta > ?
+            """,
+            (sufijo, ahora),
+        )
+        fila = cursor.fetchone()
+
+    if not fila or fila["hasta"] is None:
+        return False, 0
+
+    restante = int(fila["hasta"] - ahora)
+    return (True, restante) if restante > 0 else (False, 0)
 
 
 def _limpiar_intentos(username: str, ip: str) -> None:
@@ -224,11 +283,10 @@ def autenticar(username: str, password: str, ip: str = "desconocida") -> dict:
             "Intento de login en cuenta bloqueada | usuario=%s ip=%s restante=%ss",
             username, ip, restante
         )
-        minutos = max(1, restante // 60)
         return {
             "ok": False,
             "bloqueado": True,
-            "error": f"Demasiados intentos. Intenta de nuevo en ~{minutos} min.",
+            "error": mensaje_bloqueo(restante),
         }
 
     # 4. Verificar credenciales
@@ -237,11 +295,31 @@ def autenticar(username: str, password: str, ip: str = "desconocida") -> dict:
     credenciales_ok = usuario is not None and verificar_password(password, hash_guardado)
 
     if not credenciales_ok:
-        _registrar_fallo(username, ip)
+        intentos, bloqueado_ahora = _registrar_fallo(username, ip)
         logger_seguridad.warning(
-            "Login fallido | usuario=%s ip=%s", username, ip
+            "Login fallido | usuario=%s ip=%s intentos=%s", username, ip, intentos
         )
-        return {"ok": False, "error": "Usuario o contraseña incorrectos."}
+
+        # si este mismo intento fue el que alcanzo el limite, avisamos del
+        # bloqueo aqui mismo en vez de esperar al siguiente intento.
+        if bloqueado_ahora:
+            logger_seguridad.warning(
+                "Cuenta bloqueada 24h por fuerza bruta | usuario=%s ip=%s", username, ip
+            )
+            return {
+                "ok": False,
+                "bloqueado": True,
+                "error": mensaje_bloqueo(BLOQUEO_SEGUNDOS),
+            }
+
+        restantes = max(0, MAX_INTENTOS - intentos)
+        return {
+            "ok": False,
+            "error": (
+                "Usuario o contraseña incorrectos. "
+                f"Te quedan {restantes} intento(s) antes del bloqueo de 24 horas."
+            ),
+        }
 
     # Éxito
     _limpiar_intentos(username, ip)
